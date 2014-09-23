@@ -70,9 +70,11 @@ func main() {
     totalpacks := 0
     packs := make(chan ipbus.Packet, 100)
     nread := flag.Int("n", 200, "number of bytes")
+    fn := flag.String("fn", "test.dat", "output filename")
+    rt := flag.Int("t", 1, "seconds to run")
     flag.Parse()
     //fmt.Printf("Received: %x\n", replydata[:nreplybytes])
-    outp, err := os.Create("test.dat")
+    outp, err := os.Create(*fn)
     if err != nil{
         panic(err)
     }
@@ -80,8 +82,9 @@ func main() {
     for i := 0; i < 5; i++ {
         loc := fmt.Sprintf("localhost:%d", 9988 + i)
         go send(loc, packs, *nread)
+    conn *net.UDPConn
     }
-    to := time.After(10 * time.Second)
+    to := time.After(time.Duration(*rt) * time.Second)
     running := true
     stop := time.Now()
     for running {
