@@ -8,6 +8,7 @@ import (
 
 type Run struct{
     Num uint32
+    Name string
     Start, End time.Time
 }
 
@@ -21,27 +22,30 @@ type ReqResp struct{
     In ipbus.PackHeader
     Bytes *[]byte
     Sent, Received time.Time
-    RAddr net.UDPAddr
-    RespIndex int
+    RAddr net.Addr
+    RespIndex, RespSize int
 }
 
 func (r *ReqResp) Encode() error {
-    *Bytes = (*Bytes)[:0]
+    *r.Bytes = (*r.Bytes)[:0]
     enc, err := r.Out.Encode()
     if err != nil {
         return err
     }
-    Bytes = append(enc)
-    r.RespIndex = len(Bytes)
+    *r.Bytes = append(*r.Bytes, enc...)
+    r.RespIndex = len(*r.Bytes)
+    for i := 0; i < 1500; i++ {
+        *r.Bytes = append(*r.Bytes, 0x0)
+    }
+    return error(nil)
 }
 
 func (r *ReqResp) Decode() error {
     r.In = ipbus.PackHeader{}
-    if err := r.In.Parse(&((*r.Bytes)[r.RespIndex:])); err != nil {
-        return err
-    }
+    err := r.In.Parse(r.Bytes, r.RespIndex)
+    return err
 }
 
-func CreateReqRes(req ipbus.Packet) ReqRes {
-    r := ReqResp{Out: req}
+func CreateReqResp(req ipbus.Packet) ReqResp {
+    return ReqResp{Out: req}
 }

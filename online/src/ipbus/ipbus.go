@@ -206,6 +206,11 @@ type Packet struct {
 	Transactions []Transaction
 }
 
+func (p *Packet) Add(t Transaction) {
+    t.ID = uint16(len(p.Transactions))
+    p.Transactions = append(p.Transactions)
+}
+
 func (p Packet) Encode() ([]byte, error) {
 	data := []byte{}
 	buf := new(bytes.Buffer)
@@ -224,11 +229,15 @@ func (p Packet) Encode() ([]byte, error) {
 	return data, error(nil)
 }
 
-func MakePacket(v uint8, id uint16, pt PacketType) Packet {
+func MakePacket(pt PacketType) Packet {
 	header := uint32(pt)
 	header |= (uint32(0xf) << 4)
-	header |= (uint32(id) << 8)
-	header |= (uint32(v) << 28)
+    if (pt == Control) {
+        header |= (uint32(1) << 8)
+    } else {
+        header |= (uint32(0) << 8)
+    }
+	header |= (uint32(Version) << 28)
 	p := Packet{header, v, id, pt, []Transaction{}}
 	return p
 }
@@ -317,18 +326,18 @@ type PackHeader struct {
 	Trans   []TranHeader
 }
 
-func (p *PackHeader) Parse(data *[]byte) error {
-	p.Version = uint8(((*data)[0] | 0xf0) >> 4)
-	p.ID = (uint16((*data)[1]) << 8)
-	p.ID |= uint16((*data)[2])
-	if (*data)[3]&0xf0 != 0xf0 {
+func (p *PackHeader) Parse(data *[]byte, loc int) error {
+	p.Version = uint8(((*data)[loc] | 0xf0) >> 4)
+	p.ID = (uint16((*data)[loc + 1]) << 8)
+	p.ID |= uint16((*data)[loc + 2])
+	if (*data)[loc + 3]&0xf0 != 0xf0 {
 		return fmt.Errorf("Invalid byte order in: %x", (*data)[3])
 	}
-	p.Type = PacketType((*data)[3] & 0x0f)
+	p.Type = PacketType((*data)[loc + 3] & 0x0f)
 	if _, ok := goodpackettypes[p.Type]; !ok {
 		return fmt.Errorf("Invalid packet type: %v", p.Type)
 	}
-	loc := 4
+	loc += 4
 	nbytes := len(*data)
 	for loc < nbytes {
 		th := TranHeader{}
