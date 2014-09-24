@@ -232,13 +232,13 @@ func (p Packet) Encode() ([]byte, error) {
 func MakePacket(pt PacketType) Packet {
 	header := uint32(pt)
 	header |= (uint32(0xf) << 4)
-    if (pt == Control) {
-        header |= (uint32(1) << 8)
-    } else {
-        header |= (uint32(0) << 8)
+    id := uint16(1)
+    if pt != Control {
+        id = uint16(0)
     }
+    header |= (uint32(id) << 8)
 	header |= (uint32(Version) << 28)
-	p := Packet{header, v, id, pt, []Transaction{}}
+	p := Packet{header, Version, id, pt, []Transaction{}}
 	return p
 }
 

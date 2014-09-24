@@ -38,7 +38,7 @@ func listen(loc string) {
                 panic(err)
             }
             //fmt.Printf("packet: %v\n", p)
-            rp := ipbus.MakePacket(ipbus.Version, uint16(0), ipbus.Control)
+            rp := ipbus.MakePacket(ipbus.Control)
             for _, t := range p.Transactions {
                 if t.Type == ipbus.Read {
                     //fmt.Printf("Read transaction requesting %d words from %x [%v].\n", t.Words, t.Body, t)
