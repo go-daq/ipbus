@@ -4,10 +4,13 @@ import (
     "fmt"
     "solid"
     "net"
+    //"runtime"
     "time"
 )
 
 func main() {
+    //runtime.GOMAXPROCS(4)
+    fmt.Println("Solid's SM1 online DAQ software!")
     con := solid.New()
     for i := 0; i < 5; i++ {
         loc := fmt.Sprintf("localhost:%d", 9988 + i)
@@ -15,6 +18,7 @@ func main() {
         if err != nil {
             panic(err)
         }
+        fmt.Printf("Adding FPGA at %v\n", addr)
         con.AddFPGA(addr)
     }
     con.Start()

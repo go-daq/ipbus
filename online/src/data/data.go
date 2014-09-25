@@ -1,6 +1,7 @@
 package data
 
 import (
+    "fmt"
     "ipbus"
     "net"
     "time"
@@ -41,6 +42,8 @@ func (r *ReqResp) Encode() error {
 }
 
 func (r *ReqResp) Decode() error {
+    fmt.Printf("Decoding from loc = %d, %d bytes\n", r.RespIndex, len(*r.Bytes))
+    fmt.Println("Decode done.")
     r.In = ipbus.PackHeader{}
     err := r.In.Parse(r.Bytes, r.RespIndex)
     return err

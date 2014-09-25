@@ -18,7 +18,7 @@ func listen(loc string) {
         panic(err)
     }
     fakedata := make([]byte, 0, 1024)
-    order := []byte{0x11, 0x22, 0x33, 0x44}
+    order := []byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}
     for i := 0; i < 1024; i++ {
         fakedata = append(fakedata, order[i % len(order)])
     }
@@ -37,27 +37,33 @@ func listen(loc string) {
             if err != nil {
                 panic(err)
             }
-            //fmt.Printf("packet: %v\n", p)
+            fmt.Printf("packet from %v with ID = %d\n", raddr, p.ID)
             rp := ipbus.MakePacket(ipbus.Control)
+            rp.ID = p.ID
             for _, t := range p.Transactions {
                 if t.Type == ipbus.Read {
                     //fmt.Printf("Read transaction requesting %d words from %x [%v].\n", t.Words, t.Body, t)
                     nt += 1
+                    time.Sleep(100 * time.Millisecond)
                     reply := ipbus.MakeReadReply(fakedata[:4 * int(t.Words)])
                     //fmt.Printf("reply = %v\n", reply)
-                    rp.Transactions = append(rp.Transactions, reply)
+                    rp.Add(reply)
+                } else if t.Type == ipbus.Write {
+                    nt += 1
+                    reply := ipbus.MakeWriteReply(t.Words)
+                    rp.Add(reply)
                 }
             }
-            //fmt.Printf("Sending packet: %v\n", rp)
             outdata, err := rp.Encode()
             if err != nil {
                 panic(err)
             }
+            //fmt.Printf("Sending packet: %v, %x\n", rp, outdata)
             _, err = conn.WriteTo(outdata, raddr)
             if err != nil {
                 panic(err)
             }
-            //fmt.Printf("Sent %d bytes.\n", n)
+            fmt.Printf("Sent ID = %d, %d bytes to %v.\n", rp.ID, n, raddr)
             //fmt.Printf("Received %d transactions.\n", nt)
             //fmt.Printf("Sent %v\n", outdata)
         }

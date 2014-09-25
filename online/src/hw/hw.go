@@ -31,15 +31,19 @@ import (
     "time"
 )
 
-func NewHW(raddr *net.UDPAddr, dt time.Duration, tosend chan ipbus.Packet,
+var nhw = 0
+
+func NewHW(num int, raddr *net.UDPAddr, dt time.Duration, tosend chan ipbus.Packet,
            errs chan error) HW {
     replies := make(chan data.ReqResp)
-	hw := HW{raddr: raddr, timeout: dt, tosend: tosend, nextid: uint16(1),
-             replies: replies, errs: errs}
+    m := make(map[uint16]chan data.ReqResp)
+    hw := HW{num: num, raddr: raddr, timeout: dt, tosend: tosend, nextid: uint16(1),
+    replies: replies, errs: errs, outps: m}
 	return hw
 }
 
 type HW struct {
+    num int
 	// incoming IPbus packets
 	tosend    chan ipbus.Packet
 	replies chan data.ReqResp
@@ -54,6 +58,10 @@ type HW struct {
 	configured bool
 	timeout    time.Duration
     nextid uint16
+}
+
+func (h HW) String() string {
+    return fmt.Sprintf("HW%d: in = %p, RAddr = %v, dt = %v", h.num, &h.tosend, h.raddr, h.timeout)
 }
 
 func (h *HW) config() error {
@@ -86,11 +94,16 @@ func (h *HW) Run() {
             h.outps[id] <- reply
         case <- tick.C:
             // handle timed out request
-            fmt.Printf("Transaction %v timed out\n", rr)
+            fmt.Printf("HW %d: Transaction %v timed out\n", h.num, rr)
 		}
 		tick.Stop()
-		close(h.outps[rr.Out.ID])
-		delete(h.outps, rr.Out.ID)
+        c, ok := h.outps[rr.Out.ID]
+        if ok {
+		    close(c)
+		    delete(h.outps, rr.Out.ID)
+        } else {
+            panic(fmt.Errorf("HW %d: Received transaction %v with no matching channel: %v\n", h.num, rr, h.outps))
+        }
 	}
 }
 
@@ -104,9 +117,11 @@ func (h *HW) Send(p ipbus.Packet) chan data.ReqResp {
     if (p.ID != uint16(0) && p.Type == ipbus.Control) {
         p.ID = h.nextid
         h.nextid += 1
+        fmt.Printf("HW %d: id %d sent, next = %d\n", h.num, p.ID, h.nextid)
     }
 	outp := make(chan data.ReqResp)
 	h.outps[p.ID] = outp
+    fmt.Printf("HW %d: Added ID: %v\n", h.num, h.outps)
 	h.tosend <- p
 	return outp
 }
@@ -122,6 +137,9 @@ func (h *HW) send(p ipbus.Packet) data.ReqResp {
 	}
     var selected *[]byte = nil
 	if ibuf < 0 {
+        if len(h.buffers) > 100 {
+            panic(fmt.Errorf("Created %d buffers.", len(h.buffers)))
+        }
 		buffer := make([]byte, 0, 3000)
 		h.buffers = append(h.buffers, buffer)
 		selected = &(h.buffers[len(h.buffers)-1])
@@ -136,6 +154,7 @@ func (h *HW) send(p ipbus.Packet) data.ReqResp {
 		panic(err)
 	}
 	// Send outgoing packet, timestamp ReqResp sent
+    fmt.Printf("HW %d: Sending packet %v to %v: %x\n", h.num, rr.Out, h.conn.RemoteAddr(), (*rr.Bytes)[:rr.RespIndex])
 	n, err := h.conn.Write((*rr.Bytes)[:rr.RespIndex])
     if err != nil {
         panic(err)
@@ -150,6 +169,7 @@ func (h *HW) send(p ipbus.Packet) data.ReqResp {
 func (h HW) receive(rr data.ReqResp) {
 	// Write data into buffer from UDP read, timestamp reply and set raddr
     n, addr, err := h.conn.ReadFrom((*rr.Bytes)[rr.RespIndex:])
+    (*rr.Bytes) = (*rr.Bytes)[:rr.RespIndex + n]
     rr.RespSize = n
     if err != nil {
         panic(err)

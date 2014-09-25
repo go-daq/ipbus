@@ -124,10 +124,10 @@ func MakeTransaction(version uint8, id uint16, words uint8, tid TypeID, code Inf
 
 func MakeRead(size uint8, addr uint32) Transaction {
 	body := make([]byte, 4)
-	body[0] = byte(addr & 0xff)
-	body[1] = byte((addr & 0xff00) >> 8)
-	body[2] = byte((addr & 0xff0000) >> 16)
-	body[3] = byte((addr & 0xff000000) >> 24)
+	body[3] = byte(addr & 0xff)
+	body[2] = byte((addr & 0xff00) >> 8)
+	body[1] = byte((addr & 0xff0000) >> 16)
+	body[0] = byte((addr & 0xff000000) >> 24)
 	return MakeTransaction(Version, 0, size, Read, Request, body)
 }
 
@@ -147,12 +147,18 @@ func MakeReadNonInc(size uint8, addr uint32) Transaction {
 
 func MakeWrite(addr uint32, data []byte) Transaction {
 	body := make([]byte, 4, 4+len(data))
-	body[0] = byte(addr & 0xf)
-	body[1] = byte((addr & 0xf0) >> 8)
-	body[2] = byte((addr & 0xf00) >> 16)
-	body[3] = byte((addr & 0xf000) >> 24)
+	body[3] = byte(addr & 0xff)
+	body[2] = byte((addr & 0xff00) >> 8)
+	body[1] = byte((addr & 0xff0000) >> 16)
+	body[0] = byte((addr & 0xff000000) >> 24)
 	body = append(body, data...)
-	return MakeTransaction(Version, 0, uint8(len(data)), Write, Request, body)
+	return MakeTransaction(Version, 0, uint8(len(data) / 4), Write, Request, body)
+}
+
+func MakeWriteReply(words uint8) Transaction {
+	//fmt.Printf("Making reply with %d bytes -> %d words.\n", len(data), len(data) / 4)
+    data := []byte{}
+	return MakeTransaction(Version, 0, words, Write, Success, data)
 }
 
 func MakeWriteNonInc(addr uint32, data []byte) Transaction {
@@ -199,26 +205,27 @@ var goodpackettypes map[PacketType]bool = map[PacketType]bool{
 }
 
 type Packet struct {
-	header       uint32
 	Version      uint8
 	ID           uint16
 	Type         PacketType
 	Transactions []Transaction
 }
 
+func (p Packet) String() string {
+    return fmt.Sprintf("v%d, id = %d, t = %v, %v", p.Version, p.ID, p.Type, p.Transactions)
+}
+
 func (p *Packet) Add(t Transaction) {
     t.ID = uint16(len(p.Transactions))
-    p.Transactions = append(p.Transactions)
+    p.Transactions = append(p.Transactions, t)
 }
 
 func (p Packet) Encode() ([]byte, error) {
 	data := []byte{}
-	buf := new(bytes.Buffer)
-	//fmt.Printf("p.header = %x\n", p.header)
-	if err := binary.Write(buf, binary.BigEndian, p.header); err != nil {
-		return data, err
-	}
-	data = append(data, buf.Bytes()...)
+    data = append(data, (uint8(p.Version) << 4))
+    data = append(data, (uint8((p.ID & 0xff00) >> 8)))
+    data = append(data, (uint8(p.ID & 0xff)))
+    data = append(data, (uint8(0xf0 | uint8(p.Type))))
 	for _, t := range p.Transactions {
 		d, err := t.Encode()
 		if err != nil {
@@ -230,15 +237,11 @@ func (p Packet) Encode() ([]byte, error) {
 }
 
 func MakePacket(pt PacketType) Packet {
-	header := uint32(pt)
-	header |= (uint32(0xf) << 4)
     id := uint16(1)
     if pt != Control {
         id = uint16(0)
     }
-    header |= (uint32(id) << 8)
-	header |= (uint32(Version) << 28)
-	p := Packet{header, Version, id, pt, []Transaction{}}
+	p := Packet{Version, id, pt, []Transaction{}}
 	return p
 }
 
@@ -251,7 +254,6 @@ func (p *Packet) DecodeHeader(h []byte) error {
 		header |= (uint32(b) << (24 - (8 * uint(i))))
 	}
 	//fmt.Printf("Got header: %x\n", header)
-	p.header = header
 	p.Version = uint8((header & 0xf0000000) >> 28)
 	p.ID = uint16((header & 0x00ffff00) >> 8)
 	bo := uint8((header & 0x000000f0) >> 4)
@@ -346,7 +348,7 @@ func (p *PackHeader) Parse(data *[]byte, loc int) error {
 			return err
 		}
 		p.Trans = append(p.Trans, th)
-		if th.Code == Success {
+		if th.Code == Request {
 			if th.Type == Read || th.Type == ReadNonInc {
 				nbytes += 8
 			} else if th.Type == Write || th.Type == WriteNonInc {
@@ -356,7 +358,7 @@ func (p *PackHeader) Parse(data *[]byte, loc int) error {
 			} else if th.Type == RMWsum {
 				nbytes += 12
 			}
-		} else if th.Code == Request {
+		} else if th.Code == Success {
 			if th.Type == Read || th.Type == ReadNonInc {
 				nbytes += 4 * (int(th.Words) + 1)
 			} else if th.Type == Write || th.Type == WriteNonInc {
@@ -382,14 +384,15 @@ type TranHeader struct {
 
 func (t *TranHeader) Parse(data *[]byte, loc int) error {
 	t.Loc = loc
-	t.Version = uint8(((*data)[0] | 0xf0) >> 4)
-	t.ID = (uint16((*data)[0]&0x0f) << 16)
-	t.Words |= uint8((*data)[1])
-	t.Type = TypeID(((*data)[3] & 0xf0) >> 4)
+	t.Version = uint8(((*data)[loc] | 0xf0) >> 4)
+	t.ID = (uint16((*data)[loc] & 0x0f) << 16)
+	t.ID |= uint16((*data)[loc + 1])
+	t.Words = uint8((*data)[loc + 2])
+	t.Type = TypeID(((*data)[loc + 3] & 0xf0) >> 4)
 	if _, ok := goodtypeids[t.Type]; !ok {
-		return fmt.Errorf("Invalid transaction type: %v", t.Type)
+        return fmt.Errorf("Invalid transaction type: %v, %x", t.Type, (*data)[loc:loc+4])
 	}
-	t.Code = InfoCode(((*data)[3] & 0x0f))
+	t.Code = InfoCode(((*data)[loc + 3] & 0x0f))
 	if _, ok := goodcodes[t.Code]; !ok {
 		return fmt.Errorf("Invalid Transaction code: %v", t.Code)
 	}

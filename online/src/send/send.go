@@ -22,7 +22,7 @@ func send(loc string, packs chan ipbus.Packet, nread int) {
     if err != nil {
         panic(err)
     }
-    packet := ipbus.MakePacket(ipbus.Version, uint16(0), ipbus.Control)
+    packet := ipbus.MakePacket(ipbus.Control)
     for nread > 0 {
         readsize := uint8(0)
         if nread < 256 {
@@ -82,7 +82,6 @@ func main() {
     for i := 0; i < 5; i++ {
         loc := fmt.Sprintf("localhost:%d", 9988 + i)
         go send(loc, packs, *nread)
-    conn *net.UDPConn
     }
     to := time.After(time.Duration(*rt) * time.Second)
     running := true
