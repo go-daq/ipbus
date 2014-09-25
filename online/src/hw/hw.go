@@ -108,7 +108,7 @@ func (h *HW) Run() {
             }
         case <- tick.C:
             // handle timed out request
-            fmt.Printf("HW %d: Transaction %v timed out\n", h.num, rr)
+            fmt.Printf("HW %d: Transaction %v timed out %v\n", h.num, rr, h.timeout)
             timedout = true
 		}
 		tick.Stop()

@@ -1,6 +1,7 @@
 package main
 
 import (
+    "flag"
     "fmt"
     "solid"
     "net"
@@ -9,11 +10,13 @@ import (
 )
 
 func main() {
+    addr := flag.String("addr", "localhost", "remote adress")
+    flag.Parse()
     runtime.GOMAXPROCS(2)
     fmt.Println("Solid's SM1 online DAQ software!")
     con := solid.New()
     for i := 0; i < 5; i++ {
-        loc := fmt.Sprintf("localhost:%d", 9988 + i)
+        loc := fmt.Sprintf("%s:%d", *addr, 9988 + i)
         addr, err := net.ResolveUDPAddr("udp", loc)
         if err != nil {
             panic(err)

@@ -1,6 +1,7 @@
 package main
 
 import(
+    "flag"
     "fmt"
     "net"
     "time"
@@ -44,7 +45,7 @@ func listen(loc string) {
                 if t.Type == ipbus.Read {
                     //fmt.Printf("Read transaction requesting %d words from %x [%v].\n", t.Words, t.Body, t)
                     nt += 1
-                    //time.Sleep(time.Millisecond)
+                    //time.Sleep(10 * time.Millisecond)
                     reply := ipbus.MakeReadReply(fakedata[:4 * int(t.Words)])
                     //fmt.Printf("reply = %v\n", reply)
                     rp.Add(reply)
@@ -72,8 +73,10 @@ func listen(loc string) {
 }
 
 func main() {
+    addr := flag.String("addr", "localhost", "local address")
+    flag.Parse()
     for i := 0; i < 5; i++ {
-        loc := fmt.Sprintf("localhost:%d", 9988 + i)
+        loc := fmt.Sprintf("%s:%d", *addr, 9988 + i)
         go listen(loc)
     }
     time.Sleep(600 * time.Second)

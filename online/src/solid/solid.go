@@ -59,7 +59,7 @@ func (r *Reader) Run() {
                 time.Sleep(r.dt)
             }
             */
-            time.Sleep(r.dt)
+            //time.Sleep(r.dt)
         }
     }
 }
@@ -99,6 +99,8 @@ func (w Writer) Run() {
                     for nbytes > target {
                         target *= 10
                     }
+                    dt := rr.Received.Sub(rr.Sent)
+                    fmt.Printf("Latency = %v\n", dt)
                 }
             case run := <-w.fromcontrol:
                 if err := w.outp.Close(); err != nil {
@@ -117,6 +119,7 @@ func (w Writer) Run() {
                 runtime := end.Sub(start)
                 rate := float64(nbytes) / runtime.Seconds() / 1000000.0
                 fmt.Printf("Writer received average rate of %v MB/s\n", rate)
+                fmt.Printf("%d bytes in %v.\n", nbytes, rate)
             }
         } else {
             r := <-w.fromcontrol
