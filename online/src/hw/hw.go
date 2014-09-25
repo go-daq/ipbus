@@ -145,7 +145,7 @@ func (h *HW) send(p ipbus.Packet) data.ReqResp {
 	// Make ReqResp
 	rr := data.CreateReqResp(p)
 	// encode outgoing packet
-	if err := rr.Encode(); err != nil {
+	if err := rr.EncodeOut(); err != nil {
 		panic(err)
 	}
 	// Send outgoing packet, timestamp ReqResp sent

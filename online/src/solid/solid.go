@@ -3,6 +3,7 @@ package solid
 import (
     "data"
     //"github.com/tarm/goserial"
+    "path/filepath"
     "fmt"
     "hw"
     "io"
@@ -60,6 +61,7 @@ func (r *Reader) Run() {
             }
             */
             //time.Sleep(r.dt)
+            //time.Sleep(time.Second)
         }
     }
 }
@@ -69,13 +71,15 @@ func (r *Reader) Run() {
 type Writer struct{
     outp *os.File
     open bool
+    dir string
     towrite chan data.ReqResp
     fromcontrol chan data.Run
     Quit chan bool
 }
 
-func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run) *Writer {
-    w := Writer{towrite: towrite, fromcontrol: fromcontrol}
+func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
+               outpdir string) *Writer {
+    w := Writer{towrite: towrite, fromcontrol: fromcontrol, dir: outpdir}
     w.Quit = make(chan bool)
     return &w
 }
@@ -92,6 +96,19 @@ func (w Writer) Run() {
             select {
             case rr := <-w.towrite:
                 // Write binary to disk
+                towrite, err := rr.Encode()
+                if err != nil {
+                    panic(err)
+                }
+                nwritten := 0
+                ntowrite := len(towrite)
+                for nwritten < ntowrite {
+                    n, err := w.outp.Write(towrite[nwritten:])
+                    if err != nil {
+                        panic(err)
+                    }
+                    nwritten += n
+                }
                 //fmt.Println("Writing to disk...")
                 nbytes += len(rr.Bytes)
                 if nbytes > target {
@@ -119,7 +136,7 @@ func (w Writer) Run() {
                 runtime := end.Sub(start)
                 rate := float64(nbytes) / runtime.Seconds() / 1000000.0
                 fmt.Printf("Writer received average rate of %v MB/s\n", rate)
-                fmt.Printf("%d bytes in %v.\n", nbytes, rate)
+                fmt.Printf("%d bytes in %v.\n", nbytes, runtime)
             }
         } else {
             r := <-w.fromcontrol
@@ -136,13 +153,14 @@ func (w *Writer) create(r data.Run) error {
     fn := fmt.Sprintf("SM1_%d_%s_%s.bin", r.Num, r.Start.Format(layout),
                       r.Name)
     err := error(nil)
+    fn = filepath.Join(w.dir, fn)
     w.outp, err = os.Create(fn)
     w.open = true
     return err
 }
 
-func New() Control {
-    c := Control{}
+func New(dir string) Control {
+    c := Control{outpdir: dir}
     c.config()
     c.errs = make(chan error, 100)
     return c
@@ -150,6 +168,7 @@ func New() Control {
 
 // Control the online DAQ software
 type Control struct{
+    outpdir string
     hws []*hw.HW
     packettohws []chan ipbus.Packet
     runtowriter chan data.Run
@@ -170,7 +189,7 @@ func (c *Control) Start() error {
     // Set up the writer
     c.runtowriter = make(chan data.Run)
     c.datatowriter = make(chan data.ReqResp, 100)
-    c.w = NewWriter(c.datatowriter, c.runtowriter)
+    c.w = NewWriter(c.datatowriter, c.runtowriter, c.outpdir)
     go c.w.Run()
     // Set up a HW and reader for each FPGA
     fmt.Println("Setting up HW and readers.")

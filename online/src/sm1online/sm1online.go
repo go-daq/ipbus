@@ -11,10 +11,11 @@ import (
 
 func main() {
     addr := flag.String("addr", "localhost", "remote adress")
+    dir := flag.String("dir", ".", "output directory")
     flag.Parse()
-    runtime.GOMAXPROCS(2)
+    runtime.GOMAXPROCS(4)
     fmt.Println("Solid's SM1 online DAQ software!")
-    con := solid.New()
+    con := solid.New(*dir)
     for i := 0; i < 5; i++ {
         loc := fmt.Sprintf("%s:%d", *addr, 9988 + i)
         addr, err := net.ResolveUDPAddr("udp", loc)
@@ -26,7 +27,10 @@ func main() {
     }
     con.Start()
     dt := 10 * time.Second
-    fmt.Printf("Going to run for %v.\n", dt)
+    start := time.Now()
+    fmt.Printf("Going to run for %v at %v.\n", dt, start)
     con.Run("test", dt)
+    stop := time.Now()
+    fmt.Printf("Stopped run at %v [%v]\n", stop, stop.Sub(start))
     con.Quit()
 }
