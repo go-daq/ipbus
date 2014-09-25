@@ -37,14 +37,14 @@ func listen(loc string) {
             if err != nil {
                 panic(err)
             }
-            fmt.Printf("packet from %v with ID = %d\n", raddr, p.ID)
+            //fmt.Printf("packet from %v with ID = %d\n", raddr, p.ID)
             rp := ipbus.MakePacket(ipbus.Control)
             rp.ID = p.ID
             for _, t := range p.Transactions {
                 if t.Type == ipbus.Read {
                     //fmt.Printf("Read transaction requesting %d words from %x [%v].\n", t.Words, t.Body, t)
                     nt += 1
-                    time.Sleep(100 * time.Millisecond)
+                    //time.Sleep(time.Millisecond)
                     reply := ipbus.MakeReadReply(fakedata[:4 * int(t.Words)])
                     //fmt.Printf("reply = %v\n", reply)
                     rp.Add(reply)
@@ -63,7 +63,7 @@ func listen(loc string) {
             if err != nil {
                 panic(err)
             }
-            fmt.Printf("Sent ID = %d, %d bytes to %v.\n", rp.ID, n, raddr)
+            //fmt.Printf("Sent ID = %d, %d bytes to %v.\n", rp.ID, n, raddr)
             //fmt.Printf("Received %d transactions.\n", nt)
             //fmt.Printf("Sent %v\n", outdata)
         }
@@ -76,5 +76,5 @@ func main() {
         loc := fmt.Sprintf("localhost:%d", 9988 + i)
         go listen(loc)
     }
-    time.Sleep(120 * time.Second)
+    time.Sleep(600 * time.Second)
 }

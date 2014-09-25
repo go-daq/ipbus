@@ -4,12 +4,12 @@ import (
     "fmt"
     "solid"
     "net"
-    //"runtime"
+    "runtime"
     "time"
 )
 
 func main() {
-    //runtime.GOMAXPROCS(4)
+    runtime.GOMAXPROCS(2)
     fmt.Println("Solid's SM1 online DAQ software!")
     con := solid.New()
     for i := 0; i < 5; i++ {

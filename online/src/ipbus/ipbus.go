@@ -328,19 +328,20 @@ type PackHeader struct {
 	Trans   []TranHeader
 }
 
-func (p *PackHeader) Parse(data *[]byte, loc int) error {
-	p.Version = uint8(((*data)[loc] | 0xf0) >> 4)
-	p.ID = (uint16((*data)[loc + 1]) << 8)
-	p.ID |= uint16((*data)[loc + 2])
-	if (*data)[loc + 3]&0xf0 != 0xf0 {
-		return fmt.Errorf("Invalid byte order in: %x", (*data)[3])
+func (p *PackHeader) Parse(data []byte, loc int) error {
+    //fmt.Printf("Decoding packet of %d bytes, with loc = %d.\n", len(data), loc)
+	p.Version = uint8((data[loc] | 0xf0) >> 4)
+	p.ID = (uint16(data[loc + 1]) << 8)
+	p.ID |= uint16(data[loc + 2])
+	if data[loc + 3] & 0xf0 != 0xf0 {
+		return fmt.Errorf("Invalid byte order in: %x", data[3])
 	}
-	p.Type = PacketType((*data)[loc + 3] & 0x0f)
+	p.Type = PacketType(data[loc + 3] & 0x0f)
 	if _, ok := goodpackettypes[p.Type]; !ok {
 		return fmt.Errorf("Invalid packet type: %v", p.Type)
 	}
 	loc += 4
-	nbytes := len(*data)
+	nbytes := len(data)
 	for loc < nbytes {
 		th := TranHeader{}
 		err := th.Parse(data, loc)
@@ -350,21 +351,21 @@ func (p *PackHeader) Parse(data *[]byte, loc int) error {
 		p.Trans = append(p.Trans, th)
 		if th.Code == Request {
 			if th.Type == Read || th.Type == ReadNonInc {
-				nbytes += 8
+				loc += 8
 			} else if th.Type == Write || th.Type == WriteNonInc {
-				nbytes += 4 * (int(th.Words) + 2)
+				loc += 4 * (int(th.Words) + 2)
 			} else if th.Type == RMWbits {
-				nbytes += 16
+				loc += 16
 			} else if th.Type == RMWsum {
-				nbytes += 12
+				loc += 12
 			}
 		} else if th.Code == Success {
 			if th.Type == Read || th.Type == ReadNonInc {
-				nbytes += 4 * (int(th.Words) + 1)
+				loc += 4 * (int(th.Words) + 1)
 			} else if th.Type == Write || th.Type == WriteNonInc {
-				nbytes += 4
+				loc += 4
 			} else if th.Type == RMWbits || th.Type == RMWsum {
-				nbytes += 8
+				loc += 8
 			}
 		} else {
 			return fmt.Errorf("Transaction code %x not implimented.", th.Code)
@@ -382,17 +383,17 @@ type TranHeader struct {
 	Code    InfoCode
 }
 
-func (t *TranHeader) Parse(data *[]byte, loc int) error {
+func (t *TranHeader) Parse(data []byte, loc int) error {
 	t.Loc = loc
-	t.Version = uint8(((*data)[loc] | 0xf0) >> 4)
-	t.ID = (uint16((*data)[loc] & 0x0f) << 16)
-	t.ID |= uint16((*data)[loc + 1])
-	t.Words = uint8((*data)[loc + 2])
-	t.Type = TypeID(((*data)[loc + 3] & 0xf0) >> 4)
+	t.Version = uint8((data[loc] | 0xf0) >> 4)
+	t.ID = (uint16(data[loc] & 0x0f) << 16)
+	t.ID |= uint16(data[loc + 1])
+	t.Words = uint8(data[loc + 2])
+	t.Type = TypeID((data[loc + 3] & 0xf0) >> 4)
 	if _, ok := goodtypeids[t.Type]; !ok {
-        return fmt.Errorf("Invalid transaction type: %v, %x", t.Type, (*data)[loc:loc+4])
+        return fmt.Errorf("Invalid transaction type: %v, %x", t.Type, data[loc:loc+4])
 	}
-	t.Code = InfoCode(((*data)[loc + 3] & 0x0f))
+	t.Code = InfoCode((data[loc + 3] & 0x0f))
 	if _, ok := goodcodes[t.Code]; !ok {
 		return fmt.Errorf("Invalid Transaction code: %v", t.Code)
 	}
