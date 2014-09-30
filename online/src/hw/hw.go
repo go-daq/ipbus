@@ -56,6 +56,7 @@ type HW struct {
 	configured bool
 	timeout    time.Duration
     nextid uint16
+    mtu uint32
 }
 
 func (h *HW) init() {
@@ -71,8 +72,20 @@ func (h HW) String() string {
 
 func (h *HW) config() error {
     err := error(nil)
-    h.conn, err = net.DialUDP("udp", nil, h.raddr)
-    return err
+    if h.conn, err = net.DialUDP("udp", nil, h.raddr); err != nil {
+        return err
+    }
+    status := ipbus.StatusPacket()
+    rc := make(chan data.ReqResp)
+    h.Send(status, rc)
+    rr := <-rc
+    statusreply := &ipbus.StatusResp{}
+    if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
+        return err
+    }
+    h.mtu = statusreply.MTU
+    h.nextid = uint16(statusreply.Next)
+    return error(nil)
 }
 
 func (h *HW) Run() {

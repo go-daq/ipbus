@@ -226,6 +226,9 @@ func (p Packet) Encode() ([]byte, error) {
     data = append(data, (uint8((p.ID & 0xff00) >> 8)))
     data = append(data, (uint8(p.ID & 0xff)))
     data = append(data, (uint8(0xf0 | uint8(p.Type))))
+    if p.Type == Status {
+        return data, error(nil)
+    }
 	for _, t := range p.Transactions {
 		d, err := t.Encode()
 		if err != nil {
@@ -328,7 +331,16 @@ type PackHeader struct {
 	Trans   []TranHeader
 }
 
-func (p *PackHeader) Parse(data []byte, loc int) error {
+func (p PackHeader) Encode() []byte {
+    out := make([]byte, 0, 4)
+    out = append(out, uint8(p.Version << 4))
+    out = append(out, uint8((p.ID & 0xff00) >> 8))
+    out = append(out, uint8(p.ID & 0xff))
+    out = append(out, uint8(0xf0) | uint8(p.Type))
+    return out
+}
+
+func (p *PackHeader) Parse(data []byte, loc int, parsetransactions bool) error {
     //fmt.Printf("Decoding packet of %d bytes, with loc = %d.\n", len(data), loc)
 	p.Version = uint8((data[loc] | 0xf0) >> 4)
 	p.ID = (uint16(data[loc + 1]) << 8)
@@ -340,39 +352,44 @@ func (p *PackHeader) Parse(data []byte, loc int) error {
 	if _, ok := goodpackettypes[p.Type]; !ok {
 		return fmt.Errorf("Invalid packet type: %v", p.Type)
 	}
-	loc += 4
-	nbytes := len(data)
-	for loc < nbytes {
-		th := TranHeader{}
-		err := th.Parse(data, loc)
-		if err != nil {
-			return err
-		}
-		p.Trans = append(p.Trans, th)
-		if th.Code == Request {
-			if th.Type == Read || th.Type == ReadNonInc {
-				loc += 8
-			} else if th.Type == Write || th.Type == WriteNonInc {
-				loc += 4 * (int(th.Words) + 2)
-			} else if th.Type == RMWbits {
-				loc += 16
-			} else if th.Type == RMWsum {
-				loc += 12
-			}
-		} else if th.Code == Success {
-			if th.Type == Read || th.Type == ReadNonInc {
-				loc += 4 * (int(th.Words) + 1)
-			} else if th.Type == Write || th.Type == WriteNonInc {
-				loc += 4
-			} else if th.Type == RMWbits || th.Type == RMWsum {
-				loc += 8
-			}
-		} else {
-			return fmt.Errorf("Transaction code %x not implimented.", th.Code)
-		}
-	}
+    if p.Type == Status {
+        fmt.Println("Received a status packet.")
+    } else if parsetransactions {
+        loc += 4
+        nbytes := len(data)
+        for loc < nbytes {
+            th := TranHeader{}
+            err := th.Parse(data, loc)
+            if err != nil {
+                return err
+            }
+            p.Trans = append(p.Trans, th)
+            if th.Code == Request {
+                if th.Type == Read || th.Type == ReadNonInc {
+                    loc += 8
+                } else if th.Type == Write || th.Type == WriteNonInc {
+                    loc += 4 * (int(th.Words) + 2)
+                } else if th.Type == RMWbits {
+                    loc += 16
+                } else if th.Type == RMWsum {
+                    loc += 12
+                }
+            } else if th.Code == Success {
+                if th.Type == Read || th.Type == ReadNonInc {
+                    loc += 4 * (int(th.Words) + 1)
+                } else if th.Type == Write || th.Type == WriteNonInc {
+                    loc += 4
+                } else if th.Type == RMWbits || th.Type == RMWsum {
+                    loc += 8
+                }
+            } else {
+                return fmt.Errorf("Transaction code %x not implimented.", th.Code)
+            }
+        }
+    }
 	return error(nil)
 }
+
 
 type TranHeader struct {
 	Loc     int
@@ -400,3 +417,140 @@ func (t *TranHeader) Parse(data []byte, loc int) error {
 	return error(nil)
 }
 
+func ResendPacket(id uint16) Packet {
+    return Packet{Version: Version, ID: id, Type: Resend}
+}
+
+func StatusPacket() Packet {
+    return Packet{Version: Version, ID: 0, Type: Status}
+}
+
+type TrafficHistory struct {
+    Data uint8
+    FailedCRC, Dropped bool
+    Type EventType
+}
+
+func (th *TrafficHistory) Encode() {
+    th.Data = uint8(th.Type)
+    if th.FailedCRC {
+        th.Data |= (0x1 << 7)
+    }
+    if th.Dropped {
+        th.Data |= (0x1 << 6)
+    }
+}
+
+func (th *TrafficHistory) Parse() {
+    th.FailedCRC = th.Data & (0x1 << 7) > 0
+    th.Dropped = th.Data & (0x1 << 6) > 0
+    th.Type = EventType(th.Data | 0x7)
+}
+
+func NewHistory(data uint8) *TrafficHistory {
+    th := &TrafficHistory{Data: data}
+    th.Parse()
+    return th
+}
+
+type EventType uint8
+
+var HardReset EventType = 0x0
+var IPbusReset EventType = 0x1
+var IPbusControlReq EventType = 0x2
+var IPbusStatusReq EventType = 0x3
+var IPbusResendReq EventType = 0x4
+var UnrecognisedUDP EventType = 0x5
+var ValidPing EventType = 0x6
+var ValidARP EventType = 0x7
+var OtherEthernet EventType = 0xf
+
+type StatusResp struct {
+    MTU, Buffers, Next uint32
+    IncomingHistory []*TrafficHistory
+    ReceivedHeaders, OutgoingHeaders []*PackHeader
+}
+
+func (s StatusResp) Encode() []byte {
+    out := make([]byte, 0, 60)
+    out = append(out, 0x20) // version
+    out = append(out, 0x00) // packet ID
+    out = append(out, 0x00) // more packet Id
+    out = append(out, 0xf1) // byte order + type = 1
+    for i := 0; i < 4; i++ {
+        shift := uint32(3 - i)
+        mask := uint32(0xff) << shift
+        out = append(out, uint8((s.MTU & mask) >> shift))
+    }
+    for i := 0; i < 4; i++ {
+        shift := uint32(3 - i)
+        mask := uint32(0xff) << shift
+        out = append(out, uint8((s.Buffers & mask) >> shift))
+    }
+    for i := 0; i < 4; i++ {
+        shift := uint32(3 - i)
+        mask := uint32(0xff) << shift
+        out = append(out, uint8((s.Next & mask) >> shift))
+    }
+    for i := 0; i < 16; i++ {
+        s.IncomingHistory[i].Encode()
+        out = append(out, s.IncomingHistory[i].Data)
+    }
+    for i := 0; i < 4; i++ {
+        out = append(out, s.ReceivedHeaders[i].Encode()...)
+    }
+    for i := 0; i < 4; i++ {
+        out = append(out, s.OutgoingHeaders[i].Encode()...)
+    }
+    return out
+}
+
+func (s *StatusResp) Parse(data []byte) error {
+    if len(data) != 60 {
+        return fmt.Errorf("Status report requires 60 bytes, received %d.", len(data))
+    }
+    head := &PackHeader{}
+    head.Parse(data, 0, false)
+    if head.ID != 0 || head.Type != Status {
+        return fmt.Errorf("Failed to parse packet with ID = %d and type = %d as Status response.",
+                          head.ID, head.Type)
+    }
+    loc := 4
+    s.MTU = 0
+    for i := 0; i < 4; i++ {
+        s.MTU += uint32(data[loc + i]) << uint32(3 - i)
+        loc += 1
+    }
+    s.Buffers = 0
+    for i := 0; i < 4; i++ {
+        s.Buffers += uint32(data[loc + i]) << uint32(3 - i)
+        loc += 1
+    }
+    s.Next = 0
+    for i := 0; i < 4; i++ {
+        s.Next += uint32(data[loc + i]) << uint32(3 - i)
+        loc += 1
+    }
+    for i := 0; i < 16; i++ {
+        s.IncomingHistory = append(s.IncomingHistory, NewHistory(uint8(data[loc + i])))
+        loc += 1
+    }
+    for i := 0; i < 4; i++ {
+        p := &PackHeader{}
+        if err := p.Parse(data, loc, false); err != nil {
+            return err
+        }
+        s.ReceivedHeaders = append(s.ReceivedHeaders, p)
+        loc += 4
+
+    }
+    for i := 0; i < 4; i++ {
+        p := &PackHeader{}
+        if err := p.Parse(data, loc, false); err != nil {
+            return err
+        }
+        s.OutgoingHeaders = append(s.ReceivedHeaders, p)
+        loc += 4
+    }
+    return error(nil)
+}

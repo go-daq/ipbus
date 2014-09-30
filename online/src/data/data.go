@@ -86,8 +86,16 @@ func (r *ReqResp) Decode() error {
     //fmt.Printf("Decoding from loc = %d, %d bytes\n", r.RespIndex, len(r.Bytes))
     //fmt.Println("Decode done.")
     r.In = ipbus.PackHeader{}
-    err := r.In.Parse(r.Bytes, r.RespIndex)
-    return err
+    if err := r.In.Parse(r.Bytes, r.RespIndex, false); err != nil {
+        return err
+    }
+    if r.In.Type != ipbus.Status {
+        if err := r.In.Parse(r.Bytes, r.RespIndex, true); err != nil {
+            return err
+        }
+    }
+    return error(nil)
+
 }
 
 func CreateReqResp(req ipbus.Packet) ReqResp {
