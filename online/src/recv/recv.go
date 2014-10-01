@@ -25,6 +25,8 @@ func listen(loc string) {
     }
     data := make([]byte, 10024)
     fmt.Println("Waiting for data...")
+    received := make([]ipbus.Packet, 0, 4)
+    sent := make([]ipbus.Packet, 0, 4)
     for {
         n, raddr, err := conn.ReadFrom(data)
         if err != nil {
@@ -39,13 +41,12 @@ func listen(loc string) {
             if err != nil {
                 panic(err)
             }
+            received = append(received, p)
+            if len(received) > 4 {
+                received = received[len(received) - 4:]
+            }
             if p.Type == ipbus.Status {
                 next := uint32(12)
-                rp := ipbus.StatusPacket()
-                outdata, err := rp.Encode()
-                if err != nil {
-                    panic(err)
-                }
                 resp := ipbus.StatusResp{
                     MTU: 1500,
                     Buffers: 2,
@@ -61,17 +62,30 @@ func listen(loc string) {
                     resp.IncomingHistory = append(resp.IncomingHistory, hist)
                 }
                 for i := 0; i < 4; i++ {
-                    nid := uint16(12 - 4 + i)
-                    p := &ipbus.PackHeader{
-                        Version: ipbus.Version,
-                        ID: nid,
-                        Type: ipbus.Control,
+                    sp := &ipbus.PackHeader{}
+                    if len(sent) > i {
+                        sp.Version = sent[i].Version
+                        sp.ID = sent[i].ID
+                        sp.Type = sent[i].Type
                     }
-                    resp.ReceivedHeaders = append(resp.ReceivedHeaders, p)
-                    resp.OutgoingHeaders = append(resp.OutgoingHeaders, p)
+                    resp.OutgoingHeaders = append(resp.OutgoingHeaders, sp)
+                    rp := &ipbus.PackHeader{}
+                    if len(received) > i {
+                        rp.Version = received[i].Version
+                        rp.ID = received[i].ID
+                        rp.Type = received[i].Type
+                    }
+                    resp.ReceivedHeaders = append(resp.ReceivedHeaders, rp)
                 }
-                moredata := resp.Encode()
-                outdata = append(outdata, moredata...)
+                outdata = resp.Encode()
+                fmt.Printf("Received a status request. Replying with:%v\n", resp)
+                /*
+                sent = append(sent, resp)
+                if len(sent) > 4 {
+                    sent = sent[len(sent) - 4:]
+                }
+                */
+                fmt.Printf("Sending %d bytes.\n", len(outdata))
             } else {
             //fmt.Printf("packet from %v with ID = %d\n", raddr, p.ID)
                 rp := ipbus.MakePacket(ipbus.Control)
@@ -93,6 +107,10 @@ func listen(loc string) {
                 outdata, err = rp.Encode()
                 if err != nil {
                     panic(err)
+                }
+                sent = append(sent, rp)
+                if len(sent) > 4 {
+                    sent = sent[len(sent) - 4:]
                 }
             }
             //fmt.Printf("Sending packet: %v, %x\n", rp, outdata)

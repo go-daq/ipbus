@@ -471,42 +471,61 @@ type StatusResp struct {
     ReceivedHeaders, OutgoingHeaders []*PackHeader
 }
 
+func (sr StatusResp) String() string {
+    s := fmt.Sprintf("%d byte MTU, %d buffers, next ID = %d.\n", sr.MTU, sr.Buffers, sr.Next)
+    s += fmt.Sprintf("incoming: %x\n", sr.IncomingHistory)
+    for _, p := range sr.ReceivedHeaders {
+        s += fmt.Sprintf("recv: %v\n", p)
+    }
+    for _, p := range sr.OutgoingHeaders {
+        s += fmt.Sprintf("sent: %v\n", p)
+    }
+    return s
+}
+
 func (s StatusResp) Encode() []byte {
     out := make([]byte, 0, 60)
     out = append(out, 0x20) // version
     out = append(out, 0x00) // packet ID
     out = append(out, 0x00) // more packet Id
     out = append(out, 0xf1) // byte order + type = 1
+    fmt.Printf("After packet header: %d bytes.\n", len(out))
     for i := 0; i < 4; i++ {
         shift := uint32(3 - i)
         mask := uint32(0xff) << shift
         out = append(out, uint8((s.MTU & mask) >> shift))
     }
+    fmt.Printf("After MTU: %d bytes.\n", len(out))
     for i := 0; i < 4; i++ {
         shift := uint32(3 - i)
         mask := uint32(0xff) << shift
         out = append(out, uint8((s.Buffers & mask) >> shift))
     }
+    fmt.Printf("After Buffers: %d bytes.\n", len(out))
     for i := 0; i < 4; i++ {
         shift := uint32(3 - i)
         mask := uint32(0xff) << shift
         out = append(out, uint8((s.Next & mask) >> shift))
     }
+    fmt.Printf("After NextID : %d bytes.\n", len(out))
     for i := 0; i < 16; i++ {
         s.IncomingHistory[i].Encode()
         out = append(out, s.IncomingHistory[i].Data)
     }
+    fmt.Printf("After incoming traffic history: %d bytes.\n", len(out))
     for i := 0; i < 4; i++ {
         out = append(out, s.ReceivedHeaders[i].Encode()...)
     }
+    fmt.Printf("After received packets: %d bytes.\n", len(out))
     for i := 0; i < 4; i++ {
         out = append(out, s.OutgoingHeaders[i].Encode()...)
     }
+    fmt.Printf("After sent packets: %d bytes.\n", len(out))
     return out
 }
 
 func (s *StatusResp) Parse(data []byte) error {
-    if len(data) != 60 {
+    if len(data) != 64 {
         return fmt.Errorf("Status report requires 60 bytes, received %d.", len(data))
     }
     head := &PackHeader{}

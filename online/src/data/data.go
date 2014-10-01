@@ -28,6 +28,12 @@ type ReqResp struct{
     RespIndex, RespSize int
 }
 
+func (r *ReqResp) ClearReply() {
+    for i := r.RespIndex; i < len(r.Bytes); i++ {
+        r.Bytes[i] = 0x0
+    }
+}
+
 func (r ReqResp) Encode() ([]byte, error) {
     out := make([]byte, 0, len(r.Bytes) + 32)
     /* Write my header: 
