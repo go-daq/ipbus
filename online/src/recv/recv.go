@@ -27,6 +27,7 @@ func listen(loc string) {
     fmt.Println("Waiting for data...")
     received := make([]ipbus.Packet, 0, 4)
     sent := make([]ipbus.Packet, 0, 4)
+    next := uint32(1)
     for {
         n, raddr, err := conn.ReadFrom(data)
         if err != nil {
@@ -41,12 +42,14 @@ func listen(loc string) {
             if err != nil {
                 panic(err)
             }
-            received = append(received, p)
-            if len(received) > 4 {
-                received = received[len(received) - 4:]
+            if p.Type == ipbus.Control {
+                next = uint32(p.ID + 1)
+                received = append(received, p)
+                if len(received) > 4 {
+                    received = received[len(received) - 4:]
+                }
             }
             if p.Type == ipbus.Status {
-                next := uint32(12)
                 resp := ipbus.StatusResp{
                     MTU: 1500,
                     Buffers: 2,
@@ -78,7 +81,7 @@ func listen(loc string) {
                     resp.ReceivedHeaders = append(resp.ReceivedHeaders, rp)
                 }
                 outdata = resp.Encode()
-                fmt.Printf("Received a status request. Replying with:%v\n", resp)
+                fmt.Printf("%s: Received a status request. Replying with:%v\n", loc, resp)
                 /*
                 sent = append(sent, resp)
                 if len(sent) > 4 {

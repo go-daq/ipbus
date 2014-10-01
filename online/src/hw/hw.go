@@ -43,7 +43,10 @@ type HW struct {
 	// hw.Send(packet, chan) method.
 	replies chan data.ReqResp   // Responses read from the socket, used by the
 	                            // hw.Run() method.
-	outps      map[uint16]chan data.ReqResp // map of transaction
+    irecent int
+    recent []uint16 // Recent packet IDs
+    outps chanmap
+	//outps      map[uint16]chan data.ReqResp // map of transaction
 	errs       chan error       // Channel to send errors to whomever cares.
 	conn       *net.UDPConn     // UDP connection with the device.
 	raddr      *net.UDPAddr     // UDP address of the hardware device.
@@ -62,7 +65,11 @@ type HW struct {
 func (h *HW) init() {
 	h.tosend = make(chan ipbus.Packet, 100)
 	h.replies = make(chan data.ReqResp)
-	h.outps = make(map[uint16]chan data.ReqResp)
+	//h.outps = make(map[uint16]chan data.ReqResp)
+    h.recent = make([]uint16, 100)
+    h.outps = newchanmap()
+    go h.outps.run()
+    h.irecent = 0
 	fmt.Printf("initialised %v\n", h)
 }
 
@@ -116,24 +123,25 @@ func (h *HW) Run() {
 		//fmt.Printf("HW%d: Received packet send, chan map = %v\n", h.num, h.outps)
 		// Send packet
 		rr := h.send(p)
-		tick := time.NewTicker(h.timeout)
 		go h.receive(rr)
 		received := false
 		timedout := false
 		lost := &data.ReqResp{}
 		for !received {
+            tick := time.NewTicker(h.timeout)
 			select {
 			case reply := <-h.replies:
 				forwardreply := true
 				if reply.In.Type == ipbus.Status {
+                    fmt.Println("Received a Status reply.")
 					if timedout {
+                        fmt.Println("Expected a status reply because %v was lost.\n", lost)
 						forwardreply = false
 						// Check whether the lost packet was received. If it
 						// was then request the reply again. Otherwise send
 						// the original request again.
 						statusreply := ipbus.StatusResp{}
-						err := statusreply.Parse(reply.Bytes[reply.RespIndex:])
-						if err != nil {
+                        if err := statusreply.Parse(reply.Bytes[reply.RespIndex:]); err != nil {
 							panic(err)
 						}
 						if lost.Out.Version != ipbus.Version {
@@ -152,12 +160,14 @@ func (h *HW) Run() {
 							}
 						}
 						if replysent {
+                            fmt.Printf("Lost package was sent, requesting resend.\n")
 							p := ipbus.ResendPacket(lost.Out.ID)
 							h.send(p)
 							lost.ClearReply()
 							go h.receive(*lost)
 						}
 						if !reqreceived {
+                            fmt.Printf("Lost package wasn't received, resending.\n")
 							h.send(lost.Out)
 						}
 					} else {
@@ -166,7 +176,9 @@ func (h *HW) Run() {
 						// but received the original reply before the status
 						// response, so the status response was received into
 						// an unrelated ReqResp.
+                        fmt.Println("HW Wasn't expecting status.")
 						if reply.Out.Type != ipbus.Status {
+                            fmt.Println("Status in reply to %v\n", reply.Out)
 							forwardreply = false
 							// Since the status request is unrelated clear the
 							// reply bytes and tell it to receive again.
@@ -181,32 +193,36 @@ func (h *HW) Run() {
 					// Send reply to the correct channel
 					id := reply.Out.ID
 					//fmt.Printf("Sending reply to originator: %d of %v\n", id, h.outps)
-					c, ok := h.outps[id]
-					if ok {
-						c <- reply
+                    req := getchan(id)
+                    h.outps.read <- req
+                    rep := <-req.rep
+					if rep.ok {
+						rep.c <- reply
 						received = true
 					} else {
-						fmt.Printf("WARNING: No channel %d in %v to send reply.\n", id, h.outps)
+                        fmt.Printf("HW%d WARNING: No channel %d in %v to send reply.\nRecent: %v\n", h.num, id, h.outps, h.recent)
 					}
+                    h.recent[h.irecent % len(h.recent)] = p.ID
+                    h.irecent += 1
 				}
-			case <-tick.C:
+            case now := <-tick.C:
 				// handle timed out request
-				fmt.Printf("HW %d: Transaction %v timed out %v\n", h.num, rr, h.timeout)
+				fmt.Printf("HW %d: Transaction %v timed out %v at %v\n", h.num, rr, h.timeout, now)
 				timedout = true
 				lost = &rr
 				statusreq := ipbus.StatusPacket()
 				h.send(statusreq)
 			}
-		}
 		tick.Stop()
+		}
 		if received {
-			// Put the reply in to the correct channel
-			_, ok := h.outps[rr.Out.ID]
-			if ok {
-				delete(h.outps, rr.Out.ID)
-			} else {
-				panic(fmt.Errorf("HW %d: Received transaction %v with no matching channel: %v\n", h.num, rr, h.outps))
-			}
+			// Remove the channel from the output map
+            req := remchan(rr.Out.ID)
+            h.outps.remove <- req
+            rep := <-req.rep
+            if rep.err != nil {
+                panic(rep.err)
+            }
 		}
 	}
 }
@@ -222,12 +238,12 @@ func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
 		h.nextid += 1
 		//fmt.Printf("HW %d: id %d sent, next = %d\n", h.num, p.ID, h.nextid)
 	}
-	if _, ok := h.outps[p.ID]; ok {
-		return fmt.Errorf("Cannot send packet %v due to conflicting ID: %v",
-			p, h.outps)
-	}
-	h.outps[p.ID] = outp
-	//fmt.Printf("HW %d: Added ID: %v\n", h.num, h.outps)
+    req := addchan(p.ID, outp)
+    h.outps.add <- req
+    rep := <-req.rep
+    if rep.err != nil {
+        return rep.err
+    }
 	h.tosend <- p
 	//fmt.Printf("HW%d: %d in tosend channel at %p.\n", h.num, len(h.tosend), &h.tosend)
 	return error(nil)
@@ -271,4 +287,78 @@ func (h HW) receive(rr data.ReqResp) {
 	rr.RAddr = addr
 	// Send data.ReqResp containing the buffer into replies
 	h.replies <- rr
+}
+
+type chanmapitem struct {
+    id uint16
+    c chan data.ReqResp
+    ok bool
+    err error
+}
+
+type chanmapreq struct {
+    val chanmapitem
+    rep chan chanmapitem
+}
+
+func getchan(id uint16) chanmapreq {
+    val := chanmapitem{id: id}
+    rep := make(chan chanmapitem)
+    return chanmapreq{val, rep}
+}
+
+func remchan(id uint16) chanmapreq {
+    return getchan(id)
+}
+
+func addchan(id uint16, c chan data.ReqResp) chanmapreq {
+    val := chanmapitem{id: id, c: c}
+    rep := make(chan chanmapitem)
+    return chanmapreq{val, rep}
+}
+
+type chanmap struct {
+    m map[uint16] chan data.ReqResp
+    add, remove, read chan chanmapreq
+}
+
+func newchanmap() chanmap {
+    return chanmap{
+        m: make(map[uint16] chan data.ReqResp),
+        add: make(chan chanmapreq),
+        remove: make(chan chanmapreq),
+        read: make(chan chanmapreq),
+    }
+}
+
+func (m *chanmap) run() {
+    running := true
+    for running {
+        select {
+        case req, open := <-m.add:
+            if !open {
+                running = false
+                break
+            }
+            err := error(nil)
+            if _, ok := m.m[req.val.id]; ok {
+                err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
+            }
+            m.m[req.val.id] = req.val.c
+            req.val.err = err
+            req.rep <- req.val
+        case req := <-m.remove:
+            err := error(nil)
+            if _, ok := m.m[req.val.id]; !ok {
+                err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
+            } else {
+                delete(m.m, req.val.id)
+            }
+            req.val.err = err
+            req.rep <- req.val
+        case req := <-m.read:
+            req.val.c, req.val.ok = m.m[req.val.id]
+            req.rep <- req.val
+        }
+    }
 }
