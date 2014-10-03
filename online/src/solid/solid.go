@@ -1,8 +1,11 @@
 package solid
 
 import (
+    "encoding/binary"
+    "bytes"
     "data"
     //"github.com/tarm/goserial"
+    "os/exec"
     "path/filepath"
     "fmt"
     "hw"
@@ -10,6 +13,8 @@ import (
     "ipbus"
     "net"
     "os"
+    "strconv"
+    "strings"
     "time"
 )
 
@@ -66,6 +71,72 @@ func (r *Reader) Run() {
     }
 }
 
+func convert(hash string) ([]byte, error) {
+    val := make([]byte, 0, len(hash) / 2)
+    if len(hash) % 2 != 0 {
+        return val, fmt.Errorf("Odd number of chars, not sha1 hash.")
+    }
+    for i := 0; i < len(hash) / 2; i++ {
+        n := 2 * i
+        s := hash[n:n + 2]
+        b, err := strconv.ParseUint(s, 16, 8)
+        if err != nil {
+            return val, err
+        }
+        if b > 255 {
+            return val, fmt.Errorf("Invalid %dth byte: %d in hash %s", i, b, hash)
+        }
+        val = append(val, uint8(b))
+    }
+    return val, nil
+}
+
+type commit struct {
+    hash []byte
+    modified bool
+}
+
+func (c commit) String() string {
+    s := fmt.Sprintf("%x", c.hash)
+    if c.modified {
+        s += " Modified"
+    }
+    return s
+}
+
+func getcommit() (commit, error) {
+    c := commit{}
+    cmd := exec.Command("git", "log", "-n", "1")
+    out, err := cmd.Output()
+    if err != nil {
+        return c, err
+    }
+    fmt.Printf("%s\n", out)
+    invalidlog := fmt.Errorf("Invalid git log: %s", out)
+    commitlines := strings.Split(string(out), "\n")
+    if len(commitlines) < 1 {
+        return c, invalidlog
+    }
+    commitline := strings.Split(commitlines[0], " ")
+    if commitline[0] != "commit" {
+        return c, invalidlog
+    }
+    hash, err := convert(commitline[1])
+    if err != nil {
+        return c, invalidlog
+    }
+    c.hash = hash
+    cmd = exec.Command("git", "diff")
+    out, err = cmd.Output()
+    if err != nil {
+        return c, err
+    }
+    fmt.Printf("%s\n", out)
+    if len(out) > 0 {
+        c.modified = true
+    }
+    return c, error(nil)
+}
 
 // Write IPbus transaction data to an output file.
 type Writer struct{
@@ -148,6 +219,7 @@ func (w Writer) Run() {
     }
 }
 
+// Create the output file and write run header.
 func (w *Writer) create(r data.Run) error {
     layout := "1504_02Jan2006"
     fn := fmt.Sprintf("SM1_%d_%s_%s.bin", r.Num, r.Start.Format(layout),
@@ -155,7 +227,49 @@ func (w *Writer) create(r data.Run) error {
     err := error(nil)
     fn = filepath.Join(w.dir, fn)
     w.outp, err = os.Create(fn)
+    if err != nil {
+        return err
+    }
     w.open = true
+    /* run header:
+        header size [32 bit words]
+        online software commit - 160 bit sha1 hash
+        run start time - 64 bit unit nanoseconds
+        target run stop time - 64 bit unit nanoseconds
+        ???
+        ???
+    */
+    size := uint32(9)
+    header := make([]byte, 0, size * 4)
+    buf := new(bytes.Buffer)
+    err = binary.Write(buf, binary.BigEndian, size)
+    header = append(header, buf.Bytes()...)
+    buf.Reset()
+    c, err := getcommit()
+    if err != nil {
+        return err
+    }
+    if c.modified {
+        return fmt.Errorf("Code not commited: %v", c)
+    }
+    header = append(header, c.hash...)
+    err = binary.Write(buf, binary.BigEndian, r.Start.UnixNano())
+    if err != nil {
+        return err
+    }
+    err = binary.Write(buf, binary.BigEndian, r.End.UnixNano())
+    if err != nil {
+        return err
+    }
+    header = append(header, buf.Bytes()...)
+    nwritten := 0
+    for nwritten < len(header) {
+        n, err := w.outp.Write(header)
+        if err != nil {
+            return err
+        }
+        nwritten += n
+    }
     return err
 }
 
