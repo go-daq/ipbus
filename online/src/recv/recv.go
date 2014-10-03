@@ -28,6 +28,8 @@ func listen(loc string) {
     received := make([]ipbus.Packet, 0, 4)
     sent := make([]ipbus.Packet, 0, 4)
     next := uint32(1)
+    lastskip := time.Now().Add(-time.Hour)
+    lastdrop := time.Now().Add(-time.Hour)
     for {
         n, raddr, err := conn.ReadFrom(data)
         if err != nil {
@@ -42,8 +44,25 @@ func listen(loc string) {
             if err != nil {
                 panic(err)
             }
+            if p.ID == uint16(2337) {
+                now := time.Now()
+                if now.Sub(lastskip) > time.Minute {
+                    fmt.Printf("Deliberately skipping: %v\n", p)
+                    lastskip = now
+                    continue
+                } else {
+                    fmt.Printf("Not skipping: %v\n", p)
+                }
+            }
             if p.Type == ipbus.Control {
-                next = uint32(p.ID + 1)
+                if uint32(p.ID) < next {
+                    fmt.Printf("WARNING: Got ID = %d, expected %d, would be dropped.\n", p.ID, next)
+                }
+                if next == 65535 {
+                    next = uint32(1)
+                } else {
+                    next = uint32(p.ID + 1)
+                }
                 received = append(received, p)
                 if len(received) > 4 {
                     received = received[len(received) - 4:]
@@ -117,9 +136,15 @@ func listen(loc string) {
                 }
             }
             //fmt.Printf("Sending packet: %v, %x\n", rp, outdata)
-            _, err = conn.WriteTo(outdata, raddr)
-            if err != nil {
-                panic(err)
+            now := time.Now()
+            if p.ID != uint16(1333) || now.Sub(lastdrop) < time.Minute {
+                _, err = conn.WriteTo(outdata, raddr)
+                if err != nil {
+                    panic(err)
+                }
+            } else {
+                fmt.Printf("Deliberately dropping reply: %v\n", p)
+                lastdrop = now
             }
             //fmt.Printf("Sent ID = %d, %d bytes to %v.\n", rp.ID, n, raddr)
             //fmt.Printf("Received %d transactions.\n", nt)
@@ -131,10 +156,12 @@ func listen(loc string) {
 
 func main() {
     addr := flag.String("addr", "localhost", "local address")
+    period := flag.Int("time", 600, "run time [s]")
     flag.Parse()
     for i := 0; i < 5; i++ {
         loc := fmt.Sprintf("%s:%d", *addr, 9988 + i)
         go listen(loc)
     }
-    time.Sleep(600 * time.Second)
+    dt := time.Duration(*period) * time.Second
+    time.Sleep(dt)
 }

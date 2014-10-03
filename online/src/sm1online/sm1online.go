@@ -12,6 +12,7 @@ import (
 func main() {
     addr := flag.String("addr", "localhost", "remote adress")
     dir := flag.String("dir", ".", "output directory")
+    period := flag.Int("time", 10, "Length of run [s]")
     flag.Parse()
     runtime.GOMAXPROCS(4)
     fmt.Println("Solid's SM1 online DAQ software!")
@@ -26,7 +27,7 @@ func main() {
         con.AddFPGA(addr)
     }
     con.Start()
-    dt := 10 * time.Second
+    dt := time.Duration(*period) * time.Second
     start := time.Now()
     fmt.Printf("Going to run for %v at %v.\n", dt, start)
     con.Run("test", dt)
