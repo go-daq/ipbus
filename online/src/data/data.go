@@ -1,17 +1,100 @@
 package data
 
 import (
-    //"fmt"
+    "fmt"
     "ipbus"
     "net"
+    "os/exec"
     "strconv"
+    "strings"
     "time"
 )
+
+func convert(hash string) ([]byte, error) {
+    val := make([]byte, 0, len(hash) / 2)
+    if len(hash) % 2 != 0 {
+        return val, fmt.Errorf("Odd number of chars, not sha1 hash.")
+    }
+    for i := 0; i < len(hash) / 2; i++ {
+        n := 2 * i
+        s := hash[n:n + 2]
+        b, err := strconv.ParseUint(s, 16, 8)
+        if err != nil {
+            return val, err
+        }
+        if b > 255 {
+            return val, fmt.Errorf("Invalid %dth byte: %d in hash %s", i, b, hash)
+        }
+        val = append(val, uint8(b))
+    }
+    return val, nil
+}
+
+var NotCommittedError = fmt.Errorf("Code not committed.")
+
+type Commit struct {
+    Hash []byte
+    Modified bool
+}
+
+func (c Commit) String() string {
+    s := fmt.Sprintf("%x", c.Hash)
+    if c.Modified {
+        s += " Modified"
+    }
+    return s
+}
+
+func getcommit() (Commit, error) {
+    c := Commit{}
+    cmd := exec.Command("git", "log", "-n", "1")
+    out, err := cmd.Output()
+    if err != nil {
+        return c, err
+    }
+    fmt.Printf("%s\n", out)
+    invalidlog := fmt.Errorf("Invalid git log: %s", out)
+    commitlines := strings.Split(string(out), "\n")
+    if len(commitlines) < 1 {
+        return c, invalidlog
+    }
+    commitline := strings.Split(commitlines[0], " ")
+    if commitline[0] != "commit" {
+        return c, invalidlog
+    }
+    hash, err := convert(commitline[1])
+    if err != nil {
+        return c, invalidlog
+    }
+    c.Hash = hash
+    cmd = exec.Command("git", "diff")
+    out, err = cmd.Output()
+    if err != nil {
+        return c, err
+    }
+    fmt.Printf("%s\n", out)
+    if len(out) > 0 {
+        c.Modified = true
+    }
+    return c, error(nil)
+}
 
 type Run struct{
     Num uint32
     Name string
     Start, End time.Time
+    Commit Commit
+}
+
+func NewRun(n uint32, name string, dt time.Duration) (Run, error) {
+    now := time.Now()
+    r := Run{Num: n, Name: name, Start: now, End: now.Add(dt)}
+    c, err := getcommit()
+    if err != nil {
+        return r, err
+    }
+    r.Commit = c
+    return r, error(nil)
 }
 
 type Config struct{
