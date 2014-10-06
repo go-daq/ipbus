@@ -28,7 +28,7 @@ import (
 
 var nhw = 0
 
-func NewHW(num int, raddr *net.UDPAddr, dt time.Duration, errs chan error) *HW {
+func NewHW(num int, raddr *net.UDPAddr, dt time.Duration, errs chan data.ErrPack) *HW {
 	hw := HW{Num: num, raddr: raddr, timeout: dt, nextid: uint16(1), errs: errs}
 	hw.init()
 	fmt.Printf("Created new HW: %v\n", hw)
@@ -47,7 +47,7 @@ type HW struct {
     recent []uint16 // Recent packet IDs
     outps chanmap
 	//outps      map[uint16]chan data.ReqResp // map of transaction
-	errs       chan error       // Channel to send errors to whomever cares.
+	errs       chan data.ErrPack    // Channel to send errors to whomever cares.
 	conn       *net.UDPConn     // UDP connection with the device.
 	raddr      *net.UDPAddr     // UDP address of the hardware device.
 	configured bool     // Flag to ensure connection is configured, etc. before
@@ -88,6 +88,7 @@ func (h *HW) config() error {
 
 // Get the device's status to set MTU and next ID.
 func (h *HW) configdevice() {
+    defer data.Clean("HW.configdevice()", h.errs)
 	status := ipbus.StatusPacket()
 	rc := make(chan data.ReqResp)
 	h.Send(status, rc)
@@ -106,6 +107,7 @@ func (h *HW) configdevice() {
  * channel is closed.
  */
 func (h *HW) Run() {
+    defer data.Clean("HW.Run()", h.errs)
 	if !h.configured {
 		if err := h.config(); err != nil {
 			panic(err)
@@ -122,12 +124,15 @@ func (h *HW) Run() {
 		}
 		//fmt.Printf("HW%d: Received packet send, chan map = %v\n", h.Num, h.outps)
 		// Send packet
-		rr := h.send(p, false)
+		rr, err := h.send(p, false)
+        if err != nil {
+            panic(err)
+        }
 		go h.receive(rr)
 		received := false
 		timedout := false
 		lost := &data.ReqResp{}
-		for !received {
+		for running && !received {
             tick := time.NewTicker(h.timeout)
 			select {
 			case reply := <-h.replies:
@@ -162,14 +167,20 @@ func (h *HW) Run() {
 						if replysent {
 							p := ipbus.ResendPacket(lost.Out.ID)
                             fmt.Printf("HW%d: Lost package was sent, requesting resend: %v.\n", h.Num, p)
-                            resentreqresp := h.send(p, true)
+                            resentreqresp, err := h.send(p, true)
+                            if err != nil {
+                                panic(err)
+                            }
                             fmt.Printf("HW%d: sent request %v\n", h.Num, resentreqresp)
 							lost.ClearReply()
 							go h.receive(*lost)
 						}
 						if !reqreceived {
                             fmt.Printf("HW%d: Lost package wasn't received :(, resending at %v.\n", h.Num, time.Now())
-                            resentreqresp := h.send(lost.Out, true)
+                            resentreqresp, err := h.send(lost.Out, true)
+                            if err != nil {
+                                panic(err)
+                            }
                             fmt.Printf("HW%d: resent %v\n", h.Num, resentreqresp)
                             go h.receive(*lost)
 						}
@@ -218,6 +229,10 @@ func (h *HW) Run() {
 				lost = &rr
 				statusreq := ipbus.StatusPacket()
 				h.send(statusreq, false)
+            case errp := <-h.errs:
+                running = false
+                fmt.Printf("HW.Run() noticed a panic, stopping.\n")
+                h.errs <- errp
 			}
 		tick.Stop()
 		}
@@ -260,7 +275,7 @@ func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
 	return error(nil)
 }
 
-func (h *HW) send(p ipbus.Packet, verbose bool) data.ReqResp {
+func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
     if p.ID == 1 {
         fmt.Printf("Sending packet with ID = 1: %v\n", p)
     }
@@ -268,16 +283,16 @@ func (h *HW) send(p ipbus.Packet, verbose bool) data.ReqResp {
 	rr := data.CreateReqResp(p)
 	// encode outgoing packet
 	if err := rr.EncodeOut(); err != nil {
-		panic(err)
+		return rr, err
 	}
 	// Send outgoing packet, timestamp ReqResp sent
 	//fmt.Printf("HW %d: Sending packet %v to %v: %x\n", h.Num, rr.Out, h.conn.RemoteAddr(), rr.Bytes[:rr.RespIndex])
 	n, err := h.conn.Write(rr.Bytes[:rr.RespIndex])
 	if err != nil {
-		panic(err)
+		return rr, err
 	}
 	if n != rr.RespIndex {
-		panic(fmt.Errorf("Only sent %d of %d bytes.", n, rr.RespIndex))
+		return rr, fmt.Errorf("Only sent %d of %d bytes.", n, rr.RespIndex)
 	}
 	rr.Sent = time.Now()
     if p.Type == ipbus.Resend {
@@ -286,10 +301,11 @@ func (h *HW) send(p ipbus.Packet, verbose bool) data.ReqResp {
     if verbose {
         fmt.Printf("HW%d: sent %v\n", h.Num, p)
     }
-	return rr
+	return rr, error(nil)
 }
 
 func (h HW) receive(rr data.ReqResp) {
+    defer data.Clean("HW.received", h.errs)
 	// Write data into buffer from UDP read, timestamp reply and set raddr
 	n, addr, err := h.conn.ReadFrom(rr.Bytes[rr.RespIndex:])
 	rr.Bytes = rr.Bytes[:rr.RespIndex+n]

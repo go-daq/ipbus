@@ -12,6 +12,7 @@ import (
     "ipbus"
     "net"
     "os"
+    "os/signal"
     "time"
 )
 
@@ -48,7 +49,8 @@ func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration) *
     return &r
 }
 
-func (r *Reader) Run() {
+func (r *Reader) Run(errs chan data.ErrPack) {
+    defer data.Clean("Reader.Run()", errs)
     r.read = make(chan data.ReqResp, 100)
     running := true
     nread := 0
@@ -62,22 +64,22 @@ func (r *Reader) Run() {
         secondlimit := 255
         if nread > 0 {
             if nread > 255 {
-                fmt.Printf("Reader%d: nread = %d, adding a 255 word read request.\n", r.hw.Num, nread)
+                //fmt.Printf("Reader%d: nread = %d, adding a 255 word read request.\n", r.hw.Num, nread)
                 p.Add(ipbus.MakeRead(uint8(255), regbuffer)) // read from buffer
                 nread -= 255
                 secondlimit = 108
             }
             if nread < secondlimit {
-                fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, nread)
+                //fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, nread)
                 p.Add(ipbus.MakeRead(uint8(nread), regbuffer)) // read from buffer
                 nread -= nread
             } else {
-                fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, secondlimit)
+                //fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, secondlimit)
                 p.Add(ipbus.MakeRead(uint8(secondlimit), regbuffer))
                 nread -= secondlimit
             }
         }
-        fmt.Printf("Reader%d: After request nread = %d\n", r.hw.Num, nread)
+        //fmt.Printf("Reader%d: After request nread = %d\n", r.hw.Num, nread)
         p.Add(ipbus.MakeRead(uint8(1), regbuffersize)) // Read how many words are left in buffer
         r.hw.Send(p, r.read)
         select {
@@ -95,20 +97,20 @@ func (r *Reader) Run() {
             valloc := data.RespIndex + 4
             bufferlen = 0
             foundlen := false
-            for i, t := range data.Out.Transactions {
+            for _, t := range data.Out.Transactions {
                 loc += 4
                 valloc += 4
                 if t.Type == ipbus.Read {
-                    fmt.Printf("Reader%d: %d: Comparing req[%d] register %x with %x\n", r.hw.Num, i, loc, data.Bytes[loc:loc + 4], bregbuffersize)
+                    //fmt.Printf("Reader%d: %d: Comparing req[%d] register %x with %x\n", r.hw.Num, i, loc, data.Bytes[loc:loc + 4], bregbuffersize)
                     if compreg(data.Bytes[loc:loc + 4], bregbuffersize) {
-                        fmt.Printf("Reader%d: Found read of buffer length register\n.", r.hw.Num)
+                        //fmt.Printf("Reader%d: Found read of buffer length register\n.", r.hw.Num)
                         buf.Write(data.Bytes[valloc:valloc + 4])
                         err := binary.Read(buf, binary.BigEndian, &bufferlen)
                         if err != nil {
                             panic(err)
                         }
                         buf.Reset()
-                        fmt.Printf("Reader%d: Found buffer length = %d\n", r.hw.Num, bufferlen)
+                        //fmt.Printf("Reader%d: Found buffer length = %d\n", r.hw.Num, bufferlen)
                         nread = int(bufferlen)
                         foundlen = true
                     }
@@ -117,10 +119,10 @@ func (r *Reader) Run() {
                 }
             }
             if !foundlen {
-                fmt.Printf("Reader%d: WARNING: Didn't find length of FPGA data buffer: nread = %d.\n", r.hw.Num, nread)
+                //fmt.Printf("Reader%d: WARNING: Didn't find length of FPGA data buffer: nread = %d.\n", r.hw.Num, nread)
             }
             if nread == 0 {
-                fmt.Printf("Reader%d: FPGA buffer empty, sleeping.\n", r.hw.Num)
+                //fmt.Printf("Reader%d: FPGA buffer empty, sleeping.\n", r.hw.Num)
                 time.Sleep(1000 * time.Millisecond)
             }
         }
@@ -146,7 +148,8 @@ func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
     return &w
 }
 // Write incoming data to disk and clear first four bytes of written data
-func (w Writer) Run() {
+func (w Writer) Run(errs chan data.ErrPack) {
+    defer data.Clean("Writer.Run()", errs)
     defer close(w.Quit)
     nbytes := 0
     target := 10
@@ -191,7 +194,7 @@ func (w Writer) Run() {
                 }
             case <-w.Quit:
                 running = false
-                if err := w.outp.Close(); err != nil {
+                if err := w.end(); err != nil {
                     panic(err)
                 }
                 end := time.Now()
@@ -278,7 +281,9 @@ func (w *Writer) create(r data.Run) error {
 func New(dir string) Control {
     c := Control{outpdir: dir}
     c.config()
-    c.errs = make(chan error, 100)
+    c.errs = make(chan data.ErrPack, 100)
+    c.signals = make(chan os.Signal)
+    signal.Notify(c.signals, os.Interrupt)
     return c
 }
 
@@ -293,20 +298,21 @@ type Control struct{
     sc SlowControl
     w *Writer
     started bool
-    errs chan error
+    errs chan data.ErrPack
+    signals chan os.Signal
 }
 
 // Prepare for the first run by configuring the FPGAs, etc
-func (c *Control) Start() error {
+func (c *Control) Start() data.ErrPack {
     fmt.Println("Starting control.")
     if c.started {
-        return error(nil)
+        return data.MakeErrPack(error(nil))
     }
     // Set up the writer
     c.runtowriter = make(chan data.Run)
     c.datatowriter = make(chan data.ReqResp, 100)
     c.w = NewWriter(c.datatowriter, c.runtowriter, c.outpdir)
-    go c.w.Run()
+    go c.w.Run(c.errs)
     // Set up a HW and reader for each FPGA
     fmt.Println("Setting up HW and readers.")
     for _, hw := range c.hws {
@@ -321,8 +327,15 @@ func (c *Control) Start() error {
     // Configure the FPGA
     fmt.Println("Configuring the FPGAs.")
 
+    //time.Sleep(time.Second)
+    err := data.MakeErrPack(error(nil))
+    select {
+    case err = <-c.errs:
+    default:
+    }
+
     c.started = true
-    return error(nil)
+    return err
 }
 
 func (c *Control) AddFPGA(addr *net.UDPAddr) {
@@ -361,10 +374,16 @@ func (c Control) startacquisition() {
         fmt.Printf("Sending FPGA START to %v\n", hw)
         hw.Send(pack, replies)
     }
+    tick := time.NewTicker(5 * time.Second)
     for i, _ := range c.hws {
-        rep := <-replies
-        fmt.Printf("Received %dth response: %v\n", i, rep)
-        c.datatowriter <- rep
+        select {
+        case rep := <-replies:
+            fmt.Printf("Received %dth response: %v\n", i, rep)
+            c.datatowriter <- rep
+        case <-tick.C:
+            fmt.Println("startacquisition timed out.")
+            break
+        }
     }
     fmt.Println("Finished startacquisition()")
 }
@@ -380,36 +399,50 @@ func (c Control) stopacquisition() {
         fmt.Printf("Sending FPGA START to %v\n", hw)
         hw.Send(pack, replies)
     }
+    tick := time.NewTicker(5 * time.Second)
     for i, _ := range c.hws {
-        rep := <-replies
-        fmt.Printf("Received %dth response: %v\n", i, rep)
-        c.datatowriter <- rep
+        select {
+        case rep := <-replies:
+            fmt.Printf("Received %dth response: %v\n", i, rep)
+            c.datatowriter <- rep
+        case <-tick.C:
+            fmt.Println("stopacquisition timed out.")
+            break
+        }
     }
     fmt.Println("Finished stopacquisition()")
 }
 
 // Start and stop a run
-func (c Control) Run(r data.Run) error {
+func (c Control) Run(r data.Run) data.ErrPack {
     dt := r.End.Sub(time.Now())
     tick := time.NewTicker(dt)
     // Tell the writer to start a new file
     c.runtowriter <- r
     // Start the readers going
     for _, reader := range c.readers {
-        go reader.Run()
+        go reader.Run(c.errs)
     }
     // Tell the FPGAs to start acquisition
     c.startacquisition()
     fmt.Printf("Run control waiting for %v.\n", dt)
-    <-tick.C
+    err := data.MakeErrPack(error(nil))
+    select {
+    case <-tick.C:
+    case err = <-c.errs:
+        fmt.Printf("Control.Run() found an error.\n")
+    case <-c.signals:
+        fmt.Printf("Run stopped by ctrl-c.\n")
+    }
     // Stop the FPGAs
+    // Really I should do this unless the error is something that would cause
     c.stopacquisition()
     // stop the readers
     for _, r := range c.readers {
         r.Stop <- true
     }
     tick.Stop()
-    return error(nil)
+    return err
 }
 
 // Cleanly stop the online DAQ software

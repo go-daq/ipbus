@@ -5,6 +5,7 @@ import (
     "ipbus"
     "net"
     "os/exec"
+    "runtime"
     "strconv"
     "strings"
     "time"
@@ -52,7 +53,7 @@ func getcommit() (Commit, error) {
     if err != nil {
         return c, err
     }
-    fmt.Printf("%s\n", out)
+    //fmt.Printf("%s\n", out)
     invalidlog := fmt.Errorf("Invalid git log: %s", out)
     commitlines := strings.Split(string(out), "\n")
     if len(commitlines) < 1 {
@@ -72,7 +73,7 @@ func getcommit() (Commit, error) {
     if err != nil {
         return c, err
     }
-    fmt.Printf("%s\n", out)
+    //fmt.Printf("%s\n", out)
     if len(out) > 0 {
         c.Modified = true
     }
@@ -191,3 +192,33 @@ func CreateReqResp(req ipbus.Packet) ReqResp {
     return ReqResp{Out: req}
 }
 
+func Clean(name string, errs chan ErrPack) {
+    if r := recover(); r != nil {
+        if err, ok := r.(error); ok {
+            ep := MakeErrPack(err)
+            fmt.Printf("Caught a panic: %s, %v\n", name, ep)
+            errs <- ep
+        } else {
+            panic(r)
+        }
+    }
+}
+
+type ErrPack struct {
+    Err error
+    Stack []byte
+}
+
+func MakeErrPack(err error) ErrPack{
+    stack := []byte{}
+    if err != nil {
+        stack = make([]byte, 1000000)
+        n := runtime.Stack(stack, true)
+        stack = stack[:n]
+    }
+    return ErrPack{err, stack}
+}
+
+func (ep ErrPack) String() string {
+    return fmt.Sprintf("Error: %v,\n\n %s", ep.Err, ep.Stack)
+}
