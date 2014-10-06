@@ -15,6 +15,24 @@ import (
     "time"
 )
 
+// Define some register locations in the FPGAs
+var regbuffersize uint32 = 0xaaaaaaaa
+var regbuffer uint32 = 0xbbbbbbbb
+var bregbuffersize []byte = []byte{0xaa, 0xaa, 0xaa, 0xaa}
+var bregbuffer []byte = []byte{0xbb, 0xbb, 0xbb, 0xbb}
+
+func compreg(a, b []byte) bool {
+    if len(a) != len(b) {
+        return false
+    }
+    for i, va := range a {
+        if va != b[i] {
+            return false
+        }
+    }
+    return true
+}
+
 // Reader polls a HW instance to read its data buffer and sends segments
 // containing MPPC data to an output channel
 type Reader struct{
@@ -33,12 +51,34 @@ func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration) *
 func (r *Reader) Run() {
     r.read = make(chan data.ReqResp, 100)
     running := true
+    nread := 0
+    buf := new(bytes.Buffer)
+    bufferlen := uint32(0)
     for running {
         // send a request to read MPPC data buffer then read remaining length
+        // Each read can request up to 255 words. To fit within one packet
+        // the maximum is read 255, read 108, read size
         p := ipbus.MakePacket(ipbus.Control)
-        p.Add(ipbus.MakeRead(uint8(255), uint32(0x33557799)))
-        p.Add(ipbus.MakeRead(uint8(108), uint32(0x33557799)))
-        p.Add(ipbus.MakeRead(uint8(1), uint32(0xffeeeedd)))
+        secondlimit := 255
+        if nread > 0 {
+            if nread > 255 {
+                fmt.Printf("Reader%d: nread = %d, adding a 255 word read request.\n", r.hw.Num, nread)
+                p.Add(ipbus.MakeRead(uint8(255), regbuffer)) // read from buffer
+                nread -= 255
+                secondlimit = 108
+            }
+            if nread < secondlimit {
+                fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, nread)
+                p.Add(ipbus.MakeRead(uint8(nread), regbuffer)) // read from buffer
+                nread -= nread
+            } else {
+                fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, secondlimit)
+                p.Add(ipbus.MakeRead(uint8(secondlimit), regbuffer))
+                nread -= secondlimit
+            }
+        }
+        fmt.Printf("Reader%d: After request nread = %d\n", r.hw.Num, nread)
+        p.Add(ipbus.MakeRead(uint8(1), regbuffersize)) // Read how many words are left in buffer
         r.hw.Send(p, r.read)
         select {
         // Signal to stop
@@ -46,24 +86,43 @@ func (r *Reader) Run() {
             running = false
             break
         // Get replies from the read request, send data to writer's channel and
-        // sleep for period based upon number of words ready to read
+        // sleep for period based upon Number of words ready to read
         case data := <-r.read:
             r.towrite <- data
-            /*
-            sizetran := data.In.Trans[2]
-            loc := sizetran.Loc
-            nleft := uint32((*data.Bytes)[loc + 4])
-            for i := 0; i < 3; i++ {
-                nleft += uint32((*data.Bytes)[loc + 5 + i])
+            // Update the Number of words to read from the FPGA's buffer.
+            // If the buffer is empty then sleep for a little time.
+            loc := 4
+            valloc := data.RespIndex + 4
+            bufferlen = 0
+            foundlen := false
+            for i, t := range data.Out.Transactions {
+                loc += 4
+                valloc += 4
+                if t.Type == ipbus.Read {
+                    fmt.Printf("Reader%d: %d: Comparing req[%d] register %x with %x\n", r.hw.Num, i, loc, data.Bytes[loc:loc + 4], bregbuffersize)
+                    if compreg(data.Bytes[loc:loc + 4], bregbuffersize) {
+                        fmt.Printf("Reader%d: Found read of buffer length register\n.", r.hw.Num)
+                        buf.Write(data.Bytes[valloc:valloc + 4])
+                        err := binary.Read(buf, binary.BigEndian, &bufferlen)
+                        if err != nil {
+                            panic(err)
+                        }
+                        buf.Reset()
+                        fmt.Printf("Reader%d: Found buffer length = %d\n", r.hw.Num, bufferlen)
+                        nread = int(bufferlen)
+                        foundlen = true
+                    }
+                    valloc += 4 * int(t.Words)
+                    loc += 4
+                }
             }
-            if nleft == 0 {
-                time.Sleep(r.period)
-            } else {
-                time.Sleep(r.dt)
+            if !foundlen {
+                fmt.Printf("Reader%d: WARNING: Didn't find length of FPGA data buffer: nread = %d.\n", r.hw.Num, nread)
             }
-            */
-            //time.Sleep(r.dt)
-            //time.Sleep(time.Second)
+            if nread == 0 {
+                fmt.Printf("Reader%d: FPGA buffer empty, sleeping.\n", r.hw.Num)
+                time.Sleep(1000 * time.Millisecond)
+            }
         }
     }
 }

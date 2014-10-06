@@ -8,7 +8,7 @@ import(
     "ipbus"
 )
 
-func listen(loc string) {
+func listen(loc string, drop bool) {
     addr, err := net.ResolveUDPAddr("udp", loc)
     if err != nil {
         panic(err)
@@ -19,7 +19,7 @@ func listen(loc string) {
         panic(err)
     }
     fakedata := make([]byte, 0, 1024)
-    order := []byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}
+    order := []byte{0x00, 0x00, 0x00, 0x12, 0x89, 0xab, 0xcd, 0xef}
     for i := 0; i < 1024; i++ {
         fakedata = append(fakedata, order[i % len(order)])
     }
@@ -44,7 +44,7 @@ func listen(loc string) {
             if err != nil {
                 panic(err)
             }
-            if p.ID == uint16(2337) {
+            if drop && p.ID == uint16(2337) {
                 now := time.Now()
                 if now.Sub(lastskip) > time.Minute {
                     fmt.Printf("Deliberately skipping: %v\n", p)
@@ -137,7 +137,7 @@ func listen(loc string) {
             }
             //fmt.Printf("Sending packet: %v, %x\n", rp, outdata)
             now := time.Now()
-            if p.ID != uint16(1333) || now.Sub(lastdrop) < time.Minute {
+            if p.ID != uint16(1333) || !drop || now.Sub(lastdrop) < time.Minute {
                 _, err = conn.WriteTo(outdata, raddr)
                 if err != nil {
                     panic(err)
@@ -157,10 +157,11 @@ func listen(loc string) {
 func main() {
     addr := flag.String("addr", "localhost", "local address")
     period := flag.Int("time", 600, "run time [s]")
+    drop := flag.Bool("drop", false, "Drop sent or received packets.")
     flag.Parse()
     for i := 0; i < 5; i++ {
         loc := fmt.Sprintf("%s:%d", *addr, 9988 + i)
-        go listen(loc)
+        go listen(loc, *drop)
     }
     dt := time.Duration(*period) * time.Second
     time.Sleep(dt)
