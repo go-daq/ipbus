@@ -227,6 +227,7 @@ func (p Packet) Encode() ([]byte, error) {
     data = append(data, (uint8(p.ID & 0xff)))
     data = append(data, (uint8(0xf0 | uint8(p.Type))))
     if p.Type == Status {
+        data = append(data, make([]byte, 60)...)
         return data, error(nil)
     }
 	for _, t := range p.Transactions {
@@ -346,7 +347,7 @@ func (p *PackHeader) Parse(data []byte, loc int, parsetransactions bool) error {
 	p.ID = (uint16(data[loc + 1]) << 8)
 	p.ID |= uint16(data[loc + 2])
 	if data[loc + 3] & 0xf0 != 0xf0 {
-		return fmt.Errorf("Invalid byte order in: %x", data[3])
+		return fmt.Errorf("Invalid byte order in: %x = %x", data[loc:], data[loc + 3])
 	}
 	p.Type = PacketType(data[loc + 3] & 0x0f)
 	if _, ok := goodpackettypes[p.Type]; !ok {
@@ -537,38 +538,39 @@ func (s *StatusResp) Parse(data []byte) error {
     loc := 4
     s.MTU = 0
     for i := 0; i < 4; i++ {
-        s.MTU += uint32(data[loc + i]) << uint32(3 - i)
-        loc += 1
+        fmt.Printf("MTU byte %d [%d] = %X\n", i, loc + i, data[loc + i])
+        s.MTU += uint32(data[loc + i]) << uint32((3 - i) * 8)
     }
+    loc += 4
     s.Buffers = 0
     for i := 0; i < 4; i++ {
-        s.Buffers += uint32(data[loc + i]) << uint32(3 - i)
-        loc += 1
+        s.Buffers += uint32(data[loc + i]) << uint32((3 - i) * 8)
     }
+    loc += 4
     s.Next = 0
     for i := 0; i < 4; i++ {
-        s.Next += uint32(data[loc + i]) << uint32(3 - i)
-        loc += 1
+        s.Next += uint32(data[loc + i]) << uint32((3 - i) * 8)
     }
+    loc += 4
     for i := 0; i < 16; i++ {
         s.IncomingHistory = append(s.IncomingHistory, NewHistory(uint8(data[loc + i])))
-        loc += 1
     }
+    loc += 16
     for i := 0; i < 4; i++ {
         p := &PackHeader{}
         if err := p.Parse(data, loc, false); err != nil {
             return err
         }
         s.ReceivedHeaders = append(s.ReceivedHeaders, p)
+        fmt.Printf("Received headers = %v\n", s.ReceivedHeaders)
         loc += 4
-
     }
     for i := 0; i < 4; i++ {
         p := &PackHeader{}
         if err := p.Parse(data, loc, false); err != nil {
             return err
         }
-        s.OutgoingHeaders = append(s.ReceivedHeaders, p)
+        s.OutgoingHeaders = append(s.OutgoingHeaders, p)
         loc += 4
     }
     return error(nil)
