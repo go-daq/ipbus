@@ -332,6 +332,10 @@ type PackHeader struct {
 	Trans   []TranHeader
 }
 
+func (p PackHeader) String() string {
+    return fmt.Sprintf("v = %d, id = 0x%x, type = %d, %d transactions.", p.Version, p.ID, p.Type, len(p.Trans))
+}
+
 func (p PackHeader) Encode() []byte {
     out := make([]byte, 0, 4)
     out = append(out, uint8(p.Version << 4))
@@ -343,13 +347,26 @@ func (p PackHeader) Encode() []byte {
 
 func (p *PackHeader) Parse(data []byte, loc int, parsetransactions bool) error {
     //fmt.Printf("Decoding packet of %d bytes, with loc = %d.\n", len(data), loc)
-	p.Version = uint8((data[loc] | 0xf0) >> 4)
+    reverse := false
+	p.Version = uint8((data[loc] & 0xf0) >> 4)
 	p.ID = (uint16(data[loc + 1]) << 8)
 	p.ID |= uint16(data[loc + 2])
 	if data[loc + 3] & 0xf0 != 0xf0 {
-		return fmt.Errorf("Invalid byte order in: %x = %x", data[loc:], data[loc + 3])
+        if data[loc] & 0xf0 == 0xf0 {
+            reverse = true
+            fmt.Printf("Header has reverse byte ordering.\n")
+        } else {
+            return fmt.Errorf("Invalid byte order in: %x = %x", data[loc:], data[loc + 3])
+        }
 	}
 	p.Type = PacketType(data[loc + 3] & 0x0f)
+    if reverse {
+        p.Version = uint8((data[loc + 3] & 0xf0) >> 4)
+        p.ID = (uint16(data[loc + 2]) << 8)
+        p.ID |= uint16(data[loc + 1])
+        p.Type = PacketType(data[loc] & 0x0f)
+        return error(nil)
+    }
 	if _, ok := goodpackettypes[p.Type]; !ok {
 		return fmt.Errorf("Invalid packet type: %v", p.Type)
 	}
@@ -432,6 +449,10 @@ type TrafficHistory struct {
     Type EventType
 }
 
+func (th TrafficHistory) String() string {
+    return fmt.Sprintf("hist: failed = %t, dropped = %t, type = %v", th.FailedCRC, th.Dropped, th.Type)
+}
+
 func (th *TrafficHistory) Encode() {
     th.Data = uint8(th.Type)
     if th.FailedCRC {
@@ -474,7 +495,7 @@ type StatusResp struct {
 
 func (sr StatusResp) String() string {
     s := fmt.Sprintf("%d byte MTU, %d buffers, next ID = %d.\n", sr.MTU, sr.Buffers, sr.Next)
-    s += fmt.Sprintf("incoming: %x\n", sr.IncomingHistory)
+    s += fmt.Sprintf("incoming: %v\n", sr.IncomingHistory)
     for _, p := range sr.ReceivedHeaders {
         s += fmt.Sprintf("recv: %v\n", p)
     }
