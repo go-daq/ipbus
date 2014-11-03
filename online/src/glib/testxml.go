@@ -7,109 +7,196 @@ import (
     "strings"
 )
 
-
-type block struct {
-    id string
-    address uint32
-    description string
-    fwinfo string
-    mode string
-    registers []register
-}
-
-func (b *block) Parse(node *xmlx.Node) (int, error) {
-    nread := 1
-    b.id = node.As("", "id")
-    addr := node.As("", "address")
-    address, err :=  strconv.ParseUint(addr, 0, 32)
-    if err != nil {
-        return nread, err
+func newmodule(node *xmlx.Node) (module, error) {
+    id := node.As("", "id")
+    addr := uint32(0)
+    if node.HasAttr("", "addr") {
+        saddr := node.As("", "addr")
+        address, err := strconv.ParseUint(saddr, 0, 32)
+        if err != nil {
+            return module{}, nil
+        }
+        addr = uint32(address)
     }
-    b.address = uint32(address)
-    decendants := make([]*xmlx.Node, 0)
     if node.HasAttr("", "module") {
         fn := node.As("", "module")
         fn = strings.Replace(fn, "file://", "addr_table/", 1)
-        fmt.Printf("Reading register %s from other file: %s\n", b.id, fn)
+        fmt.Printf("Need to read module from another file: %s\n", fn)
         otherdoc := xmlx.New()
-        err = otherdoc.LoadFile(fn, nil)
+        err := otherdoc.LoadFile(fn, nil)
         if err != nil {
-            return nread, err
+            return module{}, err
         }
-        othernodes := otherdoc.SelectNodesRecursive("", "node")
-        node = othernodes[0]
-        fmt.Printf("othernodes = [\n%v\n]\n", othernodes)
-        decendants = node.SelectNodesRecursive("", "node")
-        decendants = decendants[1:]
-        fmt.Printf("decendants = [\n%v\n]\n", othernodes)
-    } else {
-        decendants = node.SelectNodesRecursive("", "node")
-        nread += len(decendants) - 1
+        node = otherdoc.SelectNode("", "module")
     }
-    idec := 1
-    for idec < len(decendants) {
-        regnode := decendants[idec]
-        rid := regnode.As("", "id")
-        raddr := regnode.As("", "address")
-        fmt.Printf("\treg id = %s, addr = %s\n", rid, raddr)
-        raddress, err := strconv.ParseUint(raddr, 0, 32)
+    regnodes := node.SelectNodes("", "register")
+    regs := make(map[string]register)
+    for _, r := range regnodes {
+        reg, err := newreg(r)
         if err != nil {
-            return nread, err
+            return module{}, err
         }
-        reg := register{rid, uint32(raddress), []value{}}
-        valuenodes := regnode.SelectNodesRecursive("", "node")
-        fmt.Printf("%d value nodes.\n", len(valuenodes))
-        idec += len(valuenodes)
-        for ival := 1; ival < len(valuenodes); ival++ {
-            vid := valuenodes[ival].As("", "id")
-            vm := valuenodes[ival].As("", "mask")
-            fmt.Printf("\t\tval id = %s, mask = %s\n", vid, vm)
-            vmask, err := strconv.ParseUint(vm, 0, 32)
-            if err != nil {
-                return nread, err
-            }
-            val := value{vid, uint32(vmask)}
-            reg.values = append(reg.values, val)
-        }
-        b.registers = append(b.registers, reg)
+        regs[reg.id] = reg
     }
-    return nread, nil
+    submodnodes := node.SelectNodesRecursive("", "module")
+    fmt.Printf("Found %d sub-module nodes.\n", len(submodnodes))
+    submods := make(map[string]module)
+    for _, m := range submodnodes[1:] {
+        fmt.Printf("Need to also parse sub-module: %s\n", m)
+        submod, err := newmodule(m)
+        if err != nil {
+            return module{}, err
+        }
+        submods[submod.id] = submod
+    }
+    portnodes := node.SelectNodes("", "port")
+    ports := make(map[string]port)
+    for _, p := range portnodes {
+        port, err := newport(p)
+        if err != nil {
+            return module{}, err
+        }
+        ports[port.id] = port
+    }
+    m := module{id, addr, regs, submods, ports}
+    return m, nil
 }
 
-func (b block) String() string {
-    s := fmt.Sprintf("Block, ID = %s at 0x%x", b.id, b.address)
-    if b.description != "" {
-        s += fmt.Sprintf(", %s", b.description)
+type module struct {
+    id string
+    address uint32
+    registers map[string]register
+    modules map[string]module
+    ports map[string]port
+}
+
+func (m module) String() string {
+    s := fmt.Sprintf("mod ID = %s at 0x%x, %d regs, %d mods, %d ports", m.id,
+                     m.address, len(m.registers), len(m.modules), len(m.ports))
+    return s
+}
+
+func newport(node *xmlx.Node) (port, error) {
+    id := node.As("", "id")
+    addr := node.As("", "address")
+    address, err := strconv.ParseUint(addr, 0, 32)
+    if err != nil {
+        return port{}, err
     }
-    if b.fwinfo != "" {
-        s += fmt.Sprintf(", %s", b.fwinfo)
+    descr := node.As("", "description")
+    fwinfo := node.As("", "fwinfo")
+    p := port{id, uint32(address), descr, fwinfo}
+    return p, nil
+}
+
+type port struct {
+    id string
+    address uint32
+    description, fwinfo string
+}
+
+func (p port) String() string {
+    s := fmt.Sprintf("port ID = %s at 0x%x", p.id, p.address)
+    if p.description != "" {
+        s += fmt.Sprintf(", %s", p.description)
     }
-    if len(b.registers) > 0 {
-        s += fmt.Sprintf(", %d registers", len(b.registers))
+    if p.fwinfo != "" {
+        s += fmt.Sprintf(", %s", p.fwinfo)
     }
     return s
 }
+
+func newreg(node *xmlx.Node) (register, error) {
+    id := node.As("", "id")
+    addr := node.As("", "address")
+    address, err := strconv.ParseUint(addr, 0, 32)
+    if err != nil {
+        return register{}, err
+    }
+    descr := node.As("", "description")
+    fwinfo := node.As("", "fwinfo")
+    blocks := make(map[string]block)
+    blocknodes := node.SelectNodes("", "block")
+    for _, b := range blocknodes {
+        block, err := newblock(b)
+        if err != nil {
+            return register{}, err
+        }
+        blocks[block.id] = block
+    }
+    reg := register{id, uint32(address), descr, fwinfo, blocks}
+    return reg, nil
+}
+
 
 type register struct {
     id string
     address uint32
-    values []value
+    description, fwinfo string
+    blocks map[string]block
+
 }
+
 func (r register) String() string {
-    s := fmt.Sprintf("reg ID = %s at 0x%x", r.id, r.address)
-    if len(r.values) > 0 {
-        s += fmt.Sprintf(", %d values", len(r.values))
+    s := fmt.Sprintf("Reg id = %s at 0x%x", r.id, r.address)
+    if r.description != "" {
+        s += fmt.Sprintf(", %s", r.description)
     }
+    if r.fwinfo != "" {
+        s += fmt.Sprintf(", %s", r.fwinfo)
+    }
+    s += fmt.Sprintf(", %d blocks", len(r.blocks))
     return s
 }
 
-type value struct {
+func newblock(node *xmlx.Node) (block, error) {
+    id := node.As("", "id")
+    addr := node.As("", "address")
+    address, err := strconv.ParseUint(addr, 0, 32)
+    if err != nil {
+        return block{}, err
+    }
+    masks := make(map[string]mask)
+    masknodes := node.SelectNodes("", "mask")
+    for _, m := range masknodes {
+        mask, err := newmask(m)
+        if err != nil {
+            return block{}, err
+        }
+        masks[mask.id] = mask
+    }
+    b := block{id, uint32(address), masks}
+    return b, nil
+}
+
+type block struct {
+    id string
+    address uint32
+    masks map[string]mask
+}
+
+func (b block) String() string {
+    return fmt.Sprintf("Block id = %s at 0x%x, %d masks", b.id, b.address,
+                       len(b.masks))
+}
+
+func newmask(node *xmlx.Node) (mask, error) {
+    id := node.As("", "id")
+    mk := node.As("", "mask")
+    msk, err := strconv.ParseUint(mk, 0, 32)
+    if err != nil {
+        return mask{}, err
+    }
+    return mask{id, uint32(msk)}, nil
+}
+
+type mask struct {
     id string
     mask uint32
 }
 
-func (v value) String() string {
-    return fmt.Sprintf("value ID = %s, mask = 0x%x", v.id, v.mask)
+func (m mask) String() string {
+    return fmt.Sprintf("Mask id = %s, mask = 0x%x", m.id, m.mask)
 }
 
 func main() {
@@ -118,92 +205,41 @@ func main() {
     if err != nil {
         panic(err)
     }
-    xmlnodes := xmldoc.SelectNodesRecursive("", "node")
-    inode := 1
-    nnodes := len(xmlnodes)
-    for inode < nnodes {
-        xmlblock := xmlnodes[inode]
-        b := block{}
-        nread, err := b.Parse(xmlblock)
+    modules := xmldoc.SelectNodes("", "module")
+    for i, m := range modules {
+        id := m.As("", "id")
+        fmt.Printf("module %d: %s\n", i, id)
+        mod, err := newmodule(m)
         if err != nil {
             panic(err)
         }
-        fmt.Printf("Read %d nodes.\n", nread)
-        inode += nread
-        fmt.Printf("%v\n", b)
-        for _, r := range b.registers {
+        fmt.Printf("%v\n", mod)
+        for _, r := range mod.registers {
             fmt.Printf("\t%v\n", r)
-            for _, v := range r.values {
-                fmt.Printf("\t\t%v\n", v)
-            }
-        }
-        /*
-        id := xmlblock.As("", "id")
-        addr := xmlblock.As("", "address")
-        address, err := strconv.ParseUint(addr, 0, 32)
-        if err != nil {
-            panic(err)
-        }
-        if xmlblock.HasAttr("", "module") {
-            fn := xmlblock.As("", "module")
-            fn = strings.Replace(fn, "file://", "addr_table/", 1)
-            fmt.Printf("Reading register %s from other file: %s\n", id, fn)
-            otherdoc := xmlx.New()
-            err = otherdoc.LoadFile(fn, nil)
-            if err != nil {
-                panic(err)
-            }
-            othernodes := otherdoc.SelectNodesRecursive("", "node")
-            //fmt.Printf("othernodes = [%v\n]\n", othernodes)
-            xmlblock = othernodes[0]
-            //fmt.Printf("xmlblock = [%v\n]\n", xmlblock)
-        }
-        //fmt.Printf("xmlblock = [%v\n]\n", xmlblock)
-        descr := xmlblock.As("", "description")
-        info := xmlblock.As("", "fwinfo")
-        bl := block{id, uint32(address), descr, info, []register{}}
-
-        blockdescendants := xmlblock.SelectNodesRecursive("", "node")
-        nsubnodes := len(blockdescendants)
-        inode += nsubnodes
-        isubnode := 1
-        for isubnode < nsubnodes {
-            xmlregister := blockdescendants[isubnode]
-            rid := xmlregister.As("", "id")
-            raddr := xmlregister.As("", "address")
-            raddress, err := strconv.ParseUint(raddr, 0, 32)
-            if err != nil {
-                panic(err)
-            }
-            reg := register{rid, uint32(raddress), []value{}}
-            registerdescendants := xmlregister.SelectNodesRecursive("", "node")
-            nsubsubnodes := len(registerdescendants)
-            isubnode += nsubsubnodes
-            if nsubsubnodes > 1 {
-                for isubsubnode := 1; isubsubnode < nsubsubnodes; isubsubnode++ {
-                    vid := registerdescendants[isubsubnode].As("", "id")
-                    vm := registerdescendants[isubsubnode].As("", "mask")
-                    vmask, err := strconv.ParseUint(vm, 0, 32)
-                    if err != nil {
-                        fmt.Printf("Failed to convert %s from %s\n", vm, vid)
-                        fmt.Printf("This is a value from the %s register.\n", reg.id)
-                        fmt.Printf("This is in the %s block.\n", bl.id)
-                        fmt.Printf("%v\n", registerdescendants[isubsubnode])
-                        panic(err)
-                    }
-                    val := value{vid, uint32(vmask)}
-                    reg.values = append(reg.values, val)
+            for _, b := range r.blocks {
+                fmt.Printf("\t\t%v\n", b)
+                for _, m := range b.masks {
+                    fmt.Printf("\t\t\t%v\n", m)
                 }
             }
-            bl.registers = append(bl.registers, reg)
         }
-        fmt.Printf("%v\n", bl)
-        for _, reg := range bl.registers {
-            fmt.Printf("\t%v\n", reg)
-            for _, val := range reg.values {
-                fmt.Printf("\t\t%v\n", val)
+        for _, p := range mod.ports {
+            fmt.Printf("\t%v\n", p)
+        }
+        for _, m := range mod.modules {
+            fmt.Printf("\t%v\n", m)
+            for _, r := range m.registers {
+                fmt.Printf("\t\t%v\n", r)
+                for _, b := range r.blocks {
+                    fmt.Printf("\t\t\t%v\n", b)
+                    for _, m := range b.masks {
+                        fmt.Printf("\t\t\t\t%v\n", m)
+                    }
+                }
+            }
+            for _, p := range m.ports {
+                fmt.Printf("\t%v\n", p)
             }
         }
-    */
     }
 }
