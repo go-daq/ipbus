@@ -1,10 +1,5 @@
-package main
+package glibxml
 
-import (
-    "fmt"
-    "glibxml"
-)
-/*
 import (
     "github.com/jteeuwen/go-pkg-xmlx"
     "fmt"
@@ -12,17 +7,17 @@ import (
     "strings"
 )
 
-func parse(filename string) (module, error) {
+func Parse(filename string) (Module, error) {
     xmldoc := xmlx.New()
     err := xmldoc.LoadFile(filename, nil)
     if err != nil {
-        return module{}, err
+        return Module{}, err
     }
     modnode := xmldoc.SelectNode("", "module")
-    return newmodule(modnode)
+    return NewModule(modnode)
 }
 
-func newmodule(node *xmlx.Node) (module, error) {
+func NewModule(node *xmlx.Node) (Module, error) {
     id := node.As("", "id")
     addr := uint32(0)
     if node.HasAttr("", "address") {
@@ -30,7 +25,7 @@ func newmodule(node *xmlx.Node) (module, error) {
         fmt.Printf("Module node has an address: %s\n", saddr)
         address, err := strconv.ParseUint(saddr, 0, 32)
         if err != nil {
-            return module{}, nil
+            return Module{}, nil
         }
         addr = uint32(address)
     }
@@ -41,7 +36,7 @@ func newmodule(node *xmlx.Node) (module, error) {
         otherdoc := xmlx.New()
         err := otherdoc.LoadFile(fn, nil)
         if err != nil {
-            return module{}, err
+            return Module{}, err
         }
         node = otherdoc.SelectNode("", "module")
     }
@@ -50,45 +45,45 @@ func newmodule(node *xmlx.Node) (module, error) {
     for _, r := range regnodes {
         reg, err := newreg(r, addr)
         if err != nil {
-            return module{}, err
+            return Module{}, err
         }
-        regs[reg.id] = reg
+        regs[reg.ID] = reg
     }
     submodnodes := node.SelectNodesRecursive("", "module")
     fmt.Printf("Found %d sub-module nodes.\n", len(submodnodes))
-    submods := make(map[string]module)
+    submods := make(map[string]Module)
     for _, m := range submodnodes[1:] {
         fmt.Printf("Need to also parse sub-module: %s\n", m)
-        submod, err := newmodule(m)
+        submod, err := NewModule(m)
         if err != nil {
-            return module{}, err
+            return Module{}, err
         }
-        submods[submod.id] = submod
+        submods[submod.ID] = submod
     }
     portnodes := node.SelectNodes("", "port")
     ports := make(map[string]port)
     for _, p := range portnodes {
         port, err := newport(p, addr)
         if err != nil {
-            return module{}, err
+            return Module{}, err
         }
-        ports[port.id] = port
+        ports[port.ID] = port
     }
-    m := module{id, addr, regs, submods, ports}
+    m := Module{id, addr, regs, submods, ports}
     return m, nil
 }
 
-type module struct {
-    id string
-    address uint32
-    registers map[string]register
-    modules map[string]module
-    ports map[string]port
+type Module struct {
+    ID string
+    Address uint32
+    Registers map[string]register
+    Modules map[string]Module
+    Ports map[string]port
 }
 
-func (m module) String() string {
-    s := fmt.Sprintf("mod ID = %s at 0x%x, %d regs, %d mods, %d ports", m.id,
-                     m.address, len(m.registers), len(m.modules), len(m.ports))
+func (m Module) String() string {
+    s := fmt.Sprintf("mod ID = %s at 0x%x, %d regs, %d mods, %d ports", m.ID,
+                     m.Address, len(m.Registers), len(m.Modules), len(m.Ports))
     return s
 }
 
@@ -106,18 +101,18 @@ func newport(node *xmlx.Node, modaddr uint32) (port, error) {
 }
 
 type port struct {
-    id string
-    laddress, gaddress uint32
-    description, fwinfo string
+    ID string
+    LAddress, GAddress uint32
+    Description, FWInfo string
 }
 
 func (p port) String() string {
-    s := fmt.Sprintf("port ID = %s at 0x%x -> 0x%x", p.id, p.laddress, p.gaddress)
-    if p.description != "" {
-        s += fmt.Sprintf(", %s", p.description)
+    s := fmt.Sprintf("port ID = %s at 0x%x -> 0x%x", p.ID, p.LAddress, p.GAddress)
+    if p.Description != "" {
+        s += fmt.Sprintf(", %s", p.Description)
     }
-    if p.fwinfo != "" {
-        s += fmt.Sprintf(", %s", p.fwinfo)
+    if p.FWInfo != "" {
+        s += fmt.Sprintf(", %s", p.FWInfo)
     }
     return s
 }
@@ -138,7 +133,7 @@ func newreg(node *xmlx.Node, modaddr uint32) (register, error) {
         if err != nil {
             return register{}, err
         }
-        blocks[block.id] = block
+        blocks[block.ID] = block
     }
     reg := register{id, uint32(address), uint32(address) + modaddr, descr,
                     fwinfo, blocks}
@@ -147,22 +142,22 @@ func newreg(node *xmlx.Node, modaddr uint32) (register, error) {
 
 
 type register struct {
-    id string
-    laddress, gaddress uint32
-    description, fwinfo string
-    blocks map[string]block
+    ID string
+    LAddress, GAddress uint32
+    Description, FWInfo string
+    Blocks map[string]block
 
 }
 
 func (r register) String() string {
-    s := fmt.Sprintf("Reg id = %s at 0x%x -> 0x%x", r.id, r.laddress, r.gaddress)
-    if r.description != "" {
-        s += fmt.Sprintf(", %s", r.description)
+    s := fmt.Sprintf("Reg id = %s at 0x%x -> 0x%x", r.ID, r.LAddress, r.GAddress)
+    if r.Description != "" {
+        s += fmt.Sprintf(", %s", r.Description)
     }
-    if r.fwinfo != "" {
-        s += fmt.Sprintf(", %s", r.fwinfo)
+    if r.FWInfo != "" {
+        s += fmt.Sprintf(", %s", r.FWInfo)
     }
-    s += fmt.Sprintf(", %d blocks", len(r.blocks))
+    s += fmt.Sprintf(", %d blocks", len(r.Blocks))
     return s
 }
 
@@ -180,21 +175,21 @@ func newblock(node *xmlx.Node, regaddr uint32) (block, error) {
         if err != nil {
             return block{}, err
         }
-        masks[mask.id] = mask.mask
+        masks[mask.ID] = mask.Mask
     }
     b := block{id, uint32(address), uint32(address) + regaddr, masks}
     return b, nil
 }
 
 type block struct {
-    id string
-    laddress, gaddress uint32
-    masks map[string]uint32
+    ID string
+    LAddress, GAddress uint32
+    Masks map[string]uint32
 }
 
 func (b block) String() string {
-    return fmt.Sprintf("Block id = %s at 0x%x -> 0x%x, %d masks", b.id,
-                       b.laddress, b.gaddress, len(b.masks))
+    return fmt.Sprintf("Block id = %s at 0x%x -> 0x%x, %d masks", b.ID,
+                       b.LAddress, b.GAddress, len(b.Masks))
 }
 
 func newmask(node *xmlx.Node) (mask, error) {
@@ -208,54 +203,55 @@ func newmask(node *xmlx.Node) (mask, error) {
 }
 
 type mask struct {
-    id string
-    mask uint32
+    ID string
+    Mask uint32
 }
 
 func (m mask) String() string {
-    return fmt.Sprintf("Mask id = %s, mask = 0x%x", m.id, m.mask)
+    return fmt.Sprintf("Mask id = %s, mask = 0x%x", m.ID, m.Mask)
 }
-*/
 
+/*
 func main() {
-    mod, err := glibxml.Parse("addr_table/nicks_sc_daq.xml")
+    mod, err := parse("addr_table/nicks_sc_daq.xml")
     if err != nil {
         panic(err)
     }
     fmt.Printf("%v\n", mod)
-    for _, r := range mod.Registers {
+    for _, r := range mod.registers {
         fmt.Printf("\t%v\n", r)
-        for _, b := range r.Blocks {
+        for _, b := range r.blocks {
             fmt.Printf("\t\t%v\n", b)
-            for n, m := range b.Masks {
+            for n, m := range b.masks {
                 fmt.Printf("\t\t\t%s mask = 0x%x\n", n, m)
             }
         }
     }
-    for _, p := range mod.Ports {
+    for _, p := range mod.ports {
         fmt.Printf("\t%v\n", p)
     }
-    for _, m := range mod.Modules {
+    for _, m := range mod.modules {
         fmt.Printf("\t%v\n", m)
-        for _, r := range m.Registers {
+        for _, r := range m.registers {
             fmt.Printf("\t\t%v\n", r)
-            for _, b := range r.Blocks {
+            for _, b := range r.blocks {
                 fmt.Printf("\t\t\t%v\n", b)
-                for n, m := range b.Masks {
+                for n, m := range b.masks {
                     fmt.Printf("\t\t\t\t%s mask = 0x%x\n", n, m)
                 }
             }
         }
-        for _, p := range m.Ports {
+        for _, p := range m.ports {
             fmt.Printf("\t%v\n", p)
         }
-        csrctrl := mod.Registers["csr"].Blocks["ctrl"]
-        fmt.Printf("csr.ctrl at 0x%x = 0x%x\n", csrctrl.LAddress, csrctrl.GAddress)
-        csrstat := mod.Registers["csr"].Blocks["stat"]
-        fmt.Printf("csr.stat at 0x%x = 0x%x\n", csrstat.LAddress, csrstat.GAddress)
-        tcsrchanctrl := mod.Modules["timing"].Registers["csr"].Blocks["chan_ctrl"]
+        csrctrl := mod.registers["csr"].blocks["ctrl"]
+        fmt.Printf("csr.ctrl at 0x%x = 0x%x\n", csrctrl.laddress, csrctrl.gaddress)
+        csrstat := mod.registers["csr"].blocks["stat"]
+        fmt.Printf("csr.stat at 0x%x = 0x%x\n", csrstat.laddress, csrstat.gaddress)
+        tcsrchanctrl := mod.modules["timing"].registers["csr"].blocks["chan_ctrl"]
         fmt.Printf("timing.csr.chan_ctrl at 0x%x = 0x%x\n",
-                   tcsrchanctrl.LAddress, tcsrchanctrl.GAddress)
-        fmt.Printf("timing.csr.chan_ctrl.phase mask = 0x%x\n", mod.Modules["timing"].Registers["csr"].Blocks["chan_ctrl"].Masks["phase"])
+                   tcsrchanctrl.laddress, tcsrchanctrl.gaddress)
+        fmt.Printf("timing.csr.chan_ctrl.phase mask = 0x%x\n", mod.modules["timing"].registers["csr"].blocks["chan_ctrl"].masks["phase"])
     }
 }
+*/
