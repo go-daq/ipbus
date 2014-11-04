@@ -3,6 +3,7 @@ package glibxml
 import (
     "github.com/jteeuwen/go-pkg-xmlx"
     "fmt"
+    "ipbus"
     "strconv"
     "strings"
 )
@@ -161,6 +162,16 @@ func (r register) String() string {
     return s
 }
 
+func (r register) Write(data []byte, pack *ipbus.Packet) {
+    tr := ipbus.MakeWrite(r.GAddress, data)
+    pack.Transactions = append(pack.Transactions, tr)
+}
+
+func (r register) Read(size uint8, pack * ipbus.Packet) {
+    tr := ipbus.MakeRead(size, r.GAddress)
+    pack.Transactions = append(pack.Transactions, tr)
+}
+
 func newblock(node *xmlx.Node, regaddr uint32) (block, error) {
     id := node.As("", "id")
     addr := node.As("", "address")
@@ -191,6 +202,44 @@ func (b block) String() string {
     return fmt.Sprintf("Block id = %s at 0x%x -> 0x%x, %d masks", b.ID,
                        b.LAddress, b.GAddress, len(b.Masks))
 }
+
+func (b block) Read(pack * ipbus.Packet) {
+    tr := ipbus.MakeRead(1, b.GAddress)
+    pack.Transactions = append(pack.Transactions, tr)
+}
+
+func (b block) Write(value uint32, pack * ipbus.Packet) {
+    data := []byte{0, 0, 0, 0}
+    for i := uint(0); i < 4; i++ {
+        shift := i * 8
+        mask := uint32(0xff) << shift
+        data[i] = uint8((value & mask) >> shift)
+    }
+    tr := ipbus.MakeWrite(b.GAddress, data)
+    pack.Transactions = append(pack.Transactions, tr)
+}
+
+func (b block) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error {
+    mask, ok := b.Masks[name]
+    if !ok {
+        return fmt.Errorf("MakedWrite failed, unknown mask: %s", name)
+    }
+    shift := uint32(0)
+    for i := uint32(0); i < 32; i++ {
+        if mask & (0x1 << i) > 0 {
+            shift = i
+            break
+        }
+    }
+    value = value << shift
+    x := uint32(0xffffffff) & value
+    x = x | (0xffffffff ^ mask)
+    y := value
+    tr := ipbus.MakeRMWbits(b.GAddress, x, y)
+    pack.Transactions = append(pack.Transactions, tr)
+    return nil
+}
+
 
 func newmask(node *xmlx.Node) (mask, error) {
     id := node.As("", "id")
