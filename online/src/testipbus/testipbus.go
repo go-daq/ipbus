@@ -52,6 +52,7 @@ func read(conn * net.UDPConn) {
 func main() {
     ipaddr := flag.String("addr", "localhost", "remote adress")
     dir := flag.String("dir", ".", "output directory")
+    port := flag.Int("port", 9988, "port")
     //period := flag.Int("time", 10, "Length of run [s]")
     //allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
     passfile := flag.String("pass", "pass.txt", "Email password file.")
@@ -69,7 +70,7 @@ func main() {
         panic(err)
     }
     control := solid.New(*dir)
-    loc := fmt.Sprintf("%s:%d", *ipaddr, 9988)
+    loc := fmt.Sprintf("%s:%d", *ipaddr, *port)
     addr, err := net.ResolveUDPAddr("udp", loc)
     if err != nil {
         panic(err)
