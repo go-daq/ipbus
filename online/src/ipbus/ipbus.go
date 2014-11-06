@@ -550,6 +550,7 @@ func (s *StatusResp) Parse(data []byte) error {
     if len(data) != 64 {
         return fmt.Errorf("Status report requires 60 bytes, received %d.", len(data))
     }
+    fmt.Printf("Parsing status: %x", data)
     head := &PackHeader{}
     head.Parse(data, 0, false)
     if head.ID != 0 || head.Type != Status {
@@ -569,9 +570,8 @@ func (s *StatusResp) Parse(data []byte) error {
     }
     loc += 4
     s.Next = 0
-    for i := 0; i < 4; i++ {
-        s.Next += uint32(data[loc + i]) << uint32((3 - i) * 8)
-    }
+    s.Next += uint32(data[loc + 1] << 8)
+    s.Next += uint32(data[loc + 2])
     loc += 4
     for i := 0; i < 16; i++ {
         s.IncomingHistory = append(s.IncomingHistory, NewHistory(uint8(data[loc + i])))

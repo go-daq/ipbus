@@ -99,6 +99,7 @@ func (h *HW) configdevice() {
 	}
 	h.mtu = statusreply.MTU
 	h.nextid = uint16(statusreply.Next)
+    fmt.Printf("Configured device: MTU = %d, next ID = %d\n", h.mtu, h.nextid)
 }
 
 /*
@@ -262,7 +263,7 @@ func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
         } else {
             h.nextid += 1
         }
-		//fmt.Printf("HW %d: id %d sent, next = %d\n", h.Num, p.ID, h.nextid)
+		fmt.Printf("HW %d: id %d sent, next = %d\n", h.Num, p.ID, h.nextid)
 	}
     req := addchan(p.ID, outp)
     h.outps.add <- req

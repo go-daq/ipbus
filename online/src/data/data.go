@@ -112,6 +112,10 @@ type ReqResp struct{
     RespIndex, RespSize int
 }
 
+func (r ReqResp) String() string {
+    return fmt.Sprintf("%v, %v, %x, %v, %v, %v, %d, %d", r.Out, r.In, r.Bytes, r.Sent, r.Received, r.RAddr, r.RespIndex, r.RespSize)
+}
+
 func (r *ReqResp) ClearReply() {
     for i := r.RespIndex; i < len(r.Bytes); i++ {
         r.Bytes[i] = 0x0
