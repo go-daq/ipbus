@@ -138,10 +138,10 @@ func MakeReadReply(data []byte) Transaction {
 
 func MakeReadNonInc(size uint8, addr uint32) Transaction {
 	body := make([]byte, 4)
-	body[0] = byte(addr & 0xf)
-	body[1] = byte((addr & 0xf0) >> 8)
-	body[2] = byte((addr & 0xf00) >> 16)
-	body[3] = byte((addr & 0xf000) >> 24)
+	body[3] = byte(addr & 0xff)
+	body[2] = byte((addr & 0xff00) >> 8)
+	body[1] = byte((addr & 0xff0000) >> 16)
+	body[0] = byte((addr & 0xff000000) >> 24)
 	return MakeTransaction(Version, 0, size, ReadNonInc, Request, body)
 }
 

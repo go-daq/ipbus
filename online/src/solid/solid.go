@@ -302,6 +302,10 @@ type Control struct{
     signals chan os.Signal
 }
 
+func (c *Control) Send(nhw int, pack ipbus.Packet, rep chan data.ReqResp) {
+    c.hws[nhw].Send(pack, rep)
+}
+
 // Prepare for the first run by configuring the FPGAs, etc
 func (c *Control) Start() data.ErrPack {
     fmt.Println("Starting control.")

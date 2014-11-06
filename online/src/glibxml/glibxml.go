@@ -1,8 +1,9 @@
 package glibxml
 
 import (
-    "github.com/jteeuwen/go-pkg-xmlx"
+    "data"
     "fmt"
+    "github.com/jteeuwen/go-pkg-xmlx"
     "ipbus"
     "strconv"
     "strings"
@@ -107,6 +108,15 @@ type port struct {
     Description, FWInfo string
 }
 
+func (p port) Read(size uint8, pack * ipbus.Packet) {
+    tr := ipbus.MakeReadNonInc(size, p.GAddress)
+    pack.Transactions = append(pack.Transactions, tr)
+}
+
+func (p port) GetReads(rr data.ReqResp) [][]uint32 {
+    return getReads(p.GAddress, rr)
+}
+
 func (p port) String() string {
     s := fmt.Sprintf("port ID = %s at 0x%x -> 0x%x", p.ID, p.LAddress, p.GAddress)
     if p.Description != "" {
@@ -172,6 +182,10 @@ func (r register) Read(size uint8, pack * ipbus.Packet) {
     pack.Transactions = append(pack.Transactions, tr)
 }
 
+func (r register) GetReads(reqresp data.ReqResp) [][]uint32 {
+    return getReads(r.GAddress, reqresp)
+}
+
 func newblock(node *xmlx.Node, regaddr uint32) (block, error) {
     id := node.As("", "id")
     addr := node.As("", "address")
@@ -207,6 +221,121 @@ func (b block) Read(pack * ipbus.Packet) {
     tr := ipbus.MakeRead(1, b.GAddress)
     pack.Transactions = append(pack.Transactions, tr)
 }
+
+func (b block) ReadNonInc(size uint8, pack * ipbus.Packet) {
+    tr := ipbus.MakeReadNonInc(1, b.GAddress)
+    pack.Transactions = append(pack.Transactions, tr)
+}
+
+/*
+Find all read transaction corresponding to a given global address. Parse the data
+into a uint32 for each block and return a slice of them.
+*/
+func (b block) GetReads(reqresp data.ReqResp) [][]uint32 {
+    return getReads(b.GAddress, reqresp)
+}
+
+func (b block) GetMaskedReads(mask string, reqresp data.ReqResp) []uint32 {
+    m, ok := b.Masks[mask]
+    if !ok {
+        return []uint32{}
+    }
+    shift := uint32(0)
+    for i := uint32(0); i < 32; i++ {
+        if m & (0x1 << i) > 0 {
+            shift = i
+            break
+        }
+    }
+    values := getReads(b.GAddress, reqresp)
+    maskedvalues := []uint32{}
+    for _, val := range values {
+        mval := (val[0] & m) >> shift
+        maskedvalues = append(maskedvalues, mval)
+    }
+    return maskedvalues
+}
+
+func getReads(address uint32, reqresp data.ReqResp) [][]uint32 {
+    addr := []byte{0, 0, 0, 0}
+    for i := uint(0); i < 4; i++ {
+        shift := 24 - i * 8
+        mask := uint32(0xff) << shift
+        addr[i] = uint8(address & mask >> shift)
+    }
+    values := [][]uint32{}
+    locations := []int{}
+    sizes := []int{}
+    // Find the locations of the reply transactions corresponding to read 
+    // requests from this memory block
+    for itr, tr := range reqresp.Out.Transactions {
+        if tr.Type == ipbus.Read || tr.Type == ipbus.ReadNonInc {
+            correctaddr := true
+            for i := 0; i < 4; i++ {
+                if addr[i] != tr.Body[i] {
+                    correctaddr = false
+                    break
+                }
+            }
+            if correctaddr {
+                reptrans := reqresp.In.Trans[itr]
+                locations = append(locations, reptrans.Loc)
+                sizes = append(sizes, int(reptrans.Words))
+            }
+        }
+    }
+    // Convert the responses into words and store in slices.
+    for i, loc := range locations {
+        loc += 4 // Skip the header
+        size := sizes[i]
+        values = append(values, []uint32{})
+        for iword := 0; iword < size; iword++ {
+            val := uint32(0)
+            for ibyte := 0; ibyte < 4; ibyte++ {
+                byteindex := loc + 4 * iword + ibyte
+                b := reqresp.Bytes[byteindex]
+                val += uint32(uint32(b) << uint32(24 - ibyte * 8))
+            }
+            values[i] = append(values[i], val)
+        }
+    }
+    return values
+}
+
+/*
+func (b block) GetReadNonInc(size uint8, reqresp data.ReqResp) ([]uint32, error) {
+    addr := []byte{0, 0, 0, 0}
+    for i := uint32(0); i < 4; i++ {
+        shift := i * 8
+        mask := uint32(0xff) << shift
+        addr[i] = uint8(b.GAddress & mask >> shift)
+    }
+    value = make([]uint32, 0, size)
+    fmt.Printf("address = 0x%x\n", addr)
+    for _, tr := range reqresp.In.Trans {
+        if tr.Type == ipbus.Read {
+            correctaddr := true
+            for i := 0; i < 4; i++ {
+                if addr[i] != reqresp.Bytes[tr.Loc + 4 + i] {
+                    correctaddr = false
+                    break
+                }
+            }
+            if correctaddr {
+                for iw := uint8(0); iw < size; iw++ {
+                    val := uint32(0)
+                    for i := uint(0); i < 4 * size; i++ {
+                        index := tr.Loc + (iw + 1) * 4 // header then data
+                        val += uint32(reqresp.Bytes[tr.Loc + (iw + 1) * 4 + i] << (i * 8))
+                    }
+                }
+                return val, nil
+            }
+        }
+    }
+    return uint32(0), fmt.Errorf("Read transaction for %s not found.", b.ID)
+}
+*/
 
 func (b block) Write(value uint32, pack * ipbus.Packet) {
     data := []byte{0, 0, 0, 0}
