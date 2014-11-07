@@ -1,13 +1,13 @@
 <module id="TOP">
 	<register id="id" address="0x0" description="ID register" fwinfo="endpoint;width=1">
-		<block id="magic" address="0x0"/>
-		<block id="info" address="0x1">
+		<word id="magic" address="0x0"/>
+		<word id="info" address="0x1">
 			<mask id="fwrev" mask="0xff"/>
 			<mask id="slot" mask="0xf00"/>
-		</block>
+		</word>
 	</register>
 	<register id="csr" address="0x4" description="ctrl/status register" fwinfo="endpoint;width=2">
-		<block id="ctrl" address="0x0">
+		<word id="ctrl" address="0x0">
 			<mask id="nuke" mask="0x1"/>
 			<mask id="soft_rst" mask="0x2"/>
 			<mask id="mmcm_rst" mask="0x4"/>
@@ -15,16 +15,16 @@
 			<mask id="idelctrl_rst" mask="0x10"/>
 			<mask id="chan_sel" mask="0xff00"/>
 			<mask id="board_id" mask="0xf0000000"/>
-		</block>
-		<block id="window_ctrl" address="0x1">
+		</word>
+		<word id="window_ctrl" address="0x1">
 			<mask id="lag" mask="0xffff"/>
 			<mask id="size" mask="0xffff0000"/>
-		</block>
-		<block id="stat" address="0x2">
+		</word>
+		<word id="stat" address="0x2">
 			<mask id="clk_lock" mask="0x1"/>
 			<mask id="clk_stop" mask="0x2"/>
 			<mask id="idelctrl_rdy" mask="0x4"/>
-		</block>
+		</word>
 	</register>
 	<module id="timing" address="0x10" module="file://nicks_sc_timing.xml"/>
 	<port id="chan" address="0x20" mode="port" description="channel FIFO access" fwinfo="endpoint;width=0"/>

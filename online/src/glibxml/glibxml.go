@@ -9,14 +9,28 @@ import (
     "strings"
 )
 
-func Parse(filename string) (Module, error) {
-    xmldoc := xmlx.New()
-    err := xmldoc.LoadFile(filename, nil)
+func Parse(name, filename string) (Module, error) {
+    basexmldoc := xmlx.New()
+    err := basexmldoc.LoadFile(filename, nil)
     if err != nil {
         return Module{}, err
     }
-    modnode := xmldoc.SelectNode("", "module")
-    return NewModule(modnode)
+    conns := basexmldoc.SelectNodes("", "connection")
+    for _, conn := range conns {
+        id := conn.As("", "id")
+        if id == name {
+            fn := conn.As("", "address_table")
+            fn = strings.Replace(fn, "file://", "", 1)
+            xmldoc := xmlx.New()
+            err := xmldoc.LoadFile(fn, nil)
+            if err != nil {
+                return Module{}, err
+            }
+            modnode := xmldoc.SelectNode("", "module")
+            return NewModule(modnode)
+        }
+    }
+    return Module{}, fmt.Errorf("XML file for connection '%s' not found in %s.", name, filename)
 }
 
 func NewModule(node *xmlx.Node) (Module, error) {
@@ -45,7 +59,7 @@ func NewModule(node *xmlx.Node) (Module, error) {
     regnodes := node.SelectNodes("", "register")
     regs := make(map[string]register)
     for _, r := range regnodes {
-        reg, err := newreg(r, addr)
+        reg, err := newregister(r, addr)
         if err != nil {
             return Module{}, err
         }
@@ -128,7 +142,7 @@ func (p port) String() string {
     return s
 }
 
-func newreg(node *xmlx.Node, modaddr uint32) (register, error) {
+func newregister(node *xmlx.Node, modaddr uint32) (register, error) {
     id := node.As("", "id")
     addr := node.As("", "address")
     address, err := strconv.ParseUint(addr, 0, 32)
@@ -137,17 +151,17 @@ func newreg(node *xmlx.Node, modaddr uint32) (register, error) {
     }
     descr := node.As("", "description")
     fwinfo := node.As("", "fwinfo")
-    blocks := make(map[string]block)
-    blocknodes := node.SelectNodes("", "block")
-    for _, b := range blocknodes {
-        block, err := newblock(b, uint32(address) + modaddr)
+    words := make(map[string]word)
+    wordnodes := node.SelectNodes("", "word")
+    for _, w := range wordnodes {
+        word, err := newword(w, uint32(address) + modaddr)
         if err != nil {
             return register{}, err
         }
-        blocks[block.ID] = block
+        words[word.ID] = word
     }
     reg := register{id, uint32(address), uint32(address) + modaddr, descr,
-                    fwinfo, blocks}
+                    fwinfo, words}
     return reg, nil
 }
 
@@ -156,7 +170,7 @@ type register struct {
     ID string
     LAddress, GAddress uint32
     Description, FWInfo string
-    Blocks map[string]block
+    Words map[string]word
 
 }
 
@@ -168,7 +182,7 @@ func (r register) String() string {
     if r.FWInfo != "" {
         s += fmt.Sprintf(", %s", r.FWInfo)
     }
-    s += fmt.Sprintf(", %d blocks", len(r.Blocks))
+    s += fmt.Sprintf(", %d words", len(r.Words))
     return s
 }
 
@@ -186,57 +200,53 @@ func (r register) GetReads(reqresp data.ReqResp) [][]uint32 {
     return getReads(r.GAddress, reqresp)
 }
 
-func newblock(node *xmlx.Node, regaddr uint32) (block, error) {
+func newword(node *xmlx.Node, regaddr uint32) (word, error) {
     id := node.As("", "id")
     addr := node.As("", "address")
     address, err := strconv.ParseUint(addr, 0, 32)
     if err != nil {
-        return block{}, err
+        return word{}, err
     }
     masks := make(map[string]uint32)
     masknodes := node.SelectNodes("", "mask")
     for _, m := range masknodes {
         mask, err := newmask(m)
         if err != nil {
-            return block{}, err
+            return word{}, err
         }
         masks[mask.ID] = mask.Mask
     }
-    b := block{id, uint32(address), uint32(address) + regaddr, masks}
-    return b, nil
+    w := word{id, uint32(address), uint32(address) + regaddr, masks}
+    return w, nil
 }
 
-type block struct {
+type word struct {
     ID string
     LAddress, GAddress uint32
     Masks map[string]uint32
 }
 
-func (b block) String() string {
-    return fmt.Sprintf("Block id = %s at 0x%x -> 0x%x, %d masks", b.ID,
-                       b.LAddress, b.GAddress, len(b.Masks))
+func (w word) String() string {
+    return fmt.Sprintf("Word id = %s at 0x%x -> 0x%x, %d masks", w.ID,
+                       w.LAddress, w.GAddress, len(w.Masks))
 }
 
-func (b block) Read(pack * ipbus.Packet) {
-    tr := ipbus.MakeRead(1, b.GAddress)
+func (w word) Read(pack * ipbus.Packet) {
+    tr := ipbus.MakeRead(1, w.GAddress)
     pack.Transactions = append(pack.Transactions, tr)
 }
 
-func (b block) ReadNonInc(size uint8, pack * ipbus.Packet) {
-    tr := ipbus.MakeReadNonInc(1, b.GAddress)
+func (w word) ReadNonInc(size uint8, pack * ipbus.Packet) {
+    tr := ipbus.MakeReadNonInc(1, w.GAddress)
     pack.Transactions = append(pack.Transactions, tr)
 }
 
-/*
-Find all read transaction corresponding to a given global address. Parse the data
-into a uint32 for each block and return a slice of them.
-*/
-func (b block) GetReads(reqresp data.ReqResp) [][]uint32 {
-    return getReads(b.GAddress, reqresp)
+func (w word) GetReads(reqresp data.ReqResp) [][]uint32 {
+    return getReads(w.GAddress, reqresp)
 }
 
-func (b block) GetMaskedReads(mask string, reqresp data.ReqResp) []uint32 {
-    m, ok := b.Masks[mask]
+func (w word) GetMaskedReads(mask string, reqresp data.ReqResp) []uint32 {
+    m, ok := w.Masks[mask]
     if !ok {
         return []uint32{}
     }
@@ -247,7 +257,7 @@ func (b block) GetMaskedReads(mask string, reqresp data.ReqResp) []uint32 {
             break
         }
     }
-    values := getReads(b.GAddress, reqresp)
+    values := getReads(w.GAddress, reqresp)
     maskedvalues := []uint32{}
     for _, val := range values {
         mval := (val[0] & m) >> shift
@@ -256,6 +266,10 @@ func (b block) GetMaskedReads(mask string, reqresp data.ReqResp) []uint32 {
     return maskedvalues
 }
 
+/*
+Find all read transaction corresponding to a given global address. Parse the data
+into a uint32 for each word and return a slice of them.
+*/
 func getReads(address uint32, reqresp data.ReqResp) [][]uint32 {
     addr := []byte{0, 0, 0, 0}
     for i := uint(0); i < 4; i++ {
@@ -267,7 +281,7 @@ func getReads(address uint32, reqresp data.ReqResp) [][]uint32 {
     locations := []int{}
     sizes := []int{}
     // Find the locations of the reply transactions corresponding to read 
-    // requests from this memory block
+    // requests from this memory word
     for itr, tr := range reqresp.Out.Transactions {
         if tr.Type == ipbus.Read || tr.Type == ipbus.ReadNonInc {
             correctaddr := true
@@ -302,54 +316,19 @@ func getReads(address uint32, reqresp data.ReqResp) [][]uint32 {
     return values
 }
 
-/*
-func (b block) GetReadNonInc(size uint8, reqresp data.ReqResp) ([]uint32, error) {
-    addr := []byte{0, 0, 0, 0}
-    for i := uint32(0); i < 4; i++ {
-        shift := i * 8
-        mask := uint32(0xff) << shift
-        addr[i] = uint8(b.GAddress & mask >> shift)
-    }
-    value = make([]uint32, 0, size)
-    fmt.Printf("address = 0x%x\n", addr)
-    for _, tr := range reqresp.In.Trans {
-        if tr.Type == ipbus.Read {
-            correctaddr := true
-            for i := 0; i < 4; i++ {
-                if addr[i] != reqresp.Bytes[tr.Loc + 4 + i] {
-                    correctaddr = false
-                    break
-                }
-            }
-            if correctaddr {
-                for iw := uint8(0); iw < size; iw++ {
-                    val := uint32(0)
-                    for i := uint(0); i < 4 * size; i++ {
-                        index := tr.Loc + (iw + 1) * 4 // header then data
-                        val += uint32(reqresp.Bytes[tr.Loc + (iw + 1) * 4 + i] << (i * 8))
-                    }
-                }
-                return val, nil
-            }
-        }
-    }
-    return uint32(0), fmt.Errorf("Read transaction for %s not found.", b.ID)
-}
-*/
-
-func (b block) Write(value uint32, pack * ipbus.Packet) {
+func (r word) Write(value uint32, pack * ipbus.Packet) {
     data := []byte{0, 0, 0, 0}
     for i := uint(0); i < 4; i++ {
         shift := i * 8
         mask := uint32(0xff) << shift
         data[i] = uint8((value & mask) >> shift)
     }
-    tr := ipbus.MakeWrite(b.GAddress, data)
+    tr := ipbus.MakeWrite(r.GAddress, data)
     pack.Transactions = append(pack.Transactions, tr)
 }
 
-func (b block) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error {
-    mask, ok := b.Masks[name]
+func (r word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error {
+    mask, ok := r.Masks[name]
     if !ok {
         return fmt.Errorf("MakedWrite failed, unknown mask: %s", name)
     }
@@ -364,7 +343,7 @@ func (b block) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error
     x := uint32(0xffffffff) & value
     x = x | (0xffffffff ^ mask)
     y := value
-    tr := ipbus.MakeRMWbits(b.GAddress, x, y)
+    tr := ipbus.MakeRMWbits(r.GAddress, x, y)
     pack.Transactions = append(pack.Transactions, tr)
     return nil
 }
@@ -388,48 +367,3 @@ type mask struct {
 func (m mask) String() string {
     return fmt.Sprintf("Mask id = %s, mask = 0x%x", m.ID, m.Mask)
 }
-
-/*
-func main() {
-    mod, err := parse("addr_table/nicks_sc_daq.xml")
-    if err != nil {
-        panic(err)
-    }
-    fmt.Printf("%v\n", mod)
-    for _, r := range mod.registers {
-        fmt.Printf("\t%v\n", r)
-        for _, b := range r.blocks {
-            fmt.Printf("\t\t%v\n", b)
-            for n, m := range b.masks {
-                fmt.Printf("\t\t\t%s mask = 0x%x\n", n, m)
-            }
-        }
-    }
-    for _, p := range mod.ports {
-        fmt.Printf("\t%v\n", p)
-    }
-    for _, m := range mod.modules {
-        fmt.Printf("\t%v\n", m)
-        for _, r := range m.registers {
-            fmt.Printf("\t\t%v\n", r)
-            for _, b := range r.blocks {
-                fmt.Printf("\t\t\t%v\n", b)
-                for n, m := range b.masks {
-                    fmt.Printf("\t\t\t\t%s mask = 0x%x\n", n, m)
-                }
-            }
-        }
-        for _, p := range m.ports {
-            fmt.Printf("\t%v\n", p)
-        }
-        csrctrl := mod.registers["csr"].blocks["ctrl"]
-        fmt.Printf("csr.ctrl at 0x%x = 0x%x\n", csrctrl.laddress, csrctrl.gaddress)
-        csrstat := mod.registers["csr"].blocks["stat"]
-        fmt.Printf("csr.stat at 0x%x = 0x%x\n", csrstat.laddress, csrstat.gaddress)
-        tcsrchanctrl := mod.modules["timing"].registers["csr"].blocks["chan_ctrl"]
-        fmt.Printf("timing.csr.chan_ctrl at 0x%x = 0x%x\n",
-                   tcsrchanctrl.laddress, tcsrchanctrl.gaddress)
-        fmt.Printf("timing.csr.chan_ctrl.phase mask = 0x%x\n", mod.modules["timing"].registers["csr"].blocks["chan_ctrl"].masks["phase"])
-    }
-}
-*/
