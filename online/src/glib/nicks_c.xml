@@ -2,5 +2,6 @@
 
 <connections>
   <connection id="GLIB_SIM"          uri="ipbusudp-2.0://192.168.202.2:50001" address_table="file://addr_table/sc_daq.xml" />
+  <connection id="GLIB_FAKE"          uri="ipbusudp-2.0://localhost:9998" address_table="file://addr_table/sc_daq.xml" />
   <connection id="GLIB"          uri="ipbusudp-2.0://192.168.200.3:50001" address_table="file://addr_table/nicks_sc_daq.xml" />
 </connections>

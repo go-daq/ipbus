@@ -7,6 +7,7 @@ import (
     //"github.com/tarm/goserial"
     "path/filepath"
     "fmt"
+    "glibxml"
     "hw"
     "io"
     "ipbus"
@@ -53,35 +54,53 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     defer data.Clean("Reader.Run()", errs)
     r.read = make(chan data.ReqResp, 100)
     running := true
-    nread := 0
-    buf := new(bytes.Buffer)
-    bufferlen := uint32(0)
+    //nread := 0
+    //buf := new(bytes.Buffer)
+    //bufferlen := uint32(0)
+    triggerpack := ipbus.MakePacket(ipbus.Control)
+    ctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    ctrl.MaskedWrite("buf_rst", 1, &triggerpack)
+    ctrl.MaskedWrite("buf_rst", 0, &triggerpack)
+    ctrl.MaskedWrite("trig", 1, &triggerpack)
+    ctrl.MaskedWrite("trig", 0, &triggerpack)
+    trigsent := false
+    readchan := uint32(0)
+    //samplesread := uint32(0)
+    //wfsize := uint32(2048)
+    fpgabuffer := r.hw.Module.Ports["chan"]
+    chanselect := r.hw.Module.Registers["ctrl"].Words["chan_sel"]
     for running {
         // send a request to read MPPC data buffer then read remaining length
         // Each read can request up to 255 words. To fit within one packet
         // the maximum is read 255, read 108, read size
-        p := ipbus.MakePacket(ipbus.Control)
-        secondlimit := 255
-        if nread > 0 {
-            if nread > 255 {
-                //fmt.Printf("Reader%d: nread = %d, adding a 255 word read request.\n", r.hw.Num, nread)
-                p.Add(ipbus.MakeRead(uint8(255), regbuffer)) // read from buffer
-                nread -= 255
-                secondlimit = 108
+        if !trigsent {
+            r.hw.Send(triggerpack, r.read)
+            readchan = 0
+            //samplesread = 0
+            trigsent = true
+        } else {
+            // Send a channel select write then a bunch of reads
+            // Need to make sure that reply fits in MTU bytes
+            // Reply has 4 bytes packet header
+            // 4 bytes chan select write transaction header
+            // 8 bytes for chan select read
+            // 256 * 4 = 1024 bytes to read 255 words
+            // 250 * 4 = 1000 bytes to read 249 words
+            // total = 4 + 4 + 8 + 1024 + 1000 = 2040 = MTU
+            // For initial testing I'll just grab as much data as I can in 
+            // a single packet.
+            p := ipbus.MakePacket(ipbus.Control)
+            chanselect.Write(readchan, &p)
+            chanselect.Read(&p)
+            fpgabuffer.Read(255, &p)
+            fpgabuffer.Read(249, &p)
+            //samplesread = 255 + 249
+            readchan += 1
+            if readchan >= 38 {
+                trigsent = false
             }
-            if nread < secondlimit {
-                //fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, nread)
-                p.Add(ipbus.MakeRead(uint8(nread), regbuffer)) // read from buffer
-                nread -= nread
-            } else {
-                //fmt.Printf("Reader%d: nread = %d, adding a %d word read request.\n", r.hw.Num, nread, secondlimit)
-                p.Add(ipbus.MakeRead(uint8(secondlimit), regbuffer))
-                nread -= secondlimit
-            }
+            r.hw.Send(p, r.read)
         }
-        //fmt.Printf("Reader%d: After request nread = %d\n", r.hw.Num, nread)
-        p.Add(ipbus.MakeRead(uint8(1), regbuffersize)) // Read how many words are left in buffer
-        r.hw.Send(p, r.read)
         select {
         // Signal to stop
         case <- r.Stop:
@@ -91,42 +110,85 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // sleep for period based upon Number of words ready to read
         case data := <-r.read:
             r.towrite <- data
-            // Update the Number of words to read from the FPGA's buffer.
-            // If the buffer is empty then sleep for a little time.
-            loc := 4
-            valloc := data.RespIndex + 4
-            bufferlen = 0
-            foundlen := false
-            for _, t := range data.Out.Transactions {
-                loc += 4
-                valloc += 4
-                if t.Type == ipbus.Read {
-                    //fmt.Printf("Reader%d: %d: Comparing req[%d] register %x with %x\n", r.hw.Num, i, loc, data.Bytes[loc:loc + 4], bregbuffersize)
-                    if compreg(data.Bytes[loc:loc + 4], bregbuffersize) {
-                        //fmt.Printf("Reader%d: Found read of buffer length register\n.", r.hw.Num)
-                        buf.Write(data.Bytes[valloc:valloc + 4])
-                        err := binary.Read(buf, binary.BigEndian, &bufferlen)
-                        if err != nil {
-                            panic(err)
-                        }
-                        buf.Reset()
-                        //fmt.Printf("Reader%d: Found buffer length = %d\n", r.hw.Num, bufferlen)
-                        nread = int(bufferlen)
-                        foundlen = true
-                    }
-                    valloc += 4 * int(t.Words)
-                    loc += 4
-                }
-            }
-            if !foundlen {
-                //fmt.Printf("Reader%d: WARNING: Didn't find length of FPGA data buffer: nread = %d.\n", r.hw.Num, nread)
-            }
-            if nread == 0 {
-                //fmt.Printf("Reader%d: FPGA buffer empty, sleeping.\n", r.hw.Num)
-                time.Sleep(1000 * time.Millisecond)
-            }
         }
     }
+}
+
+func (r Reader) Reset() {
+    fmt.Printf("HW%d: doing reset.\n", r.hw.Num)
+    pack := ipbus.MakePacket(ipbus.Control)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("soft_rst", 1, &pack)
+    r.hw.Module.Registers["id"].Words["magic"].Read(&pack)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(pack, reply)
+    rr := <-reply
+    magicids := r.hw.Module.Registers["id"].Words["magic"].GetReads(rr)
+    if len(magicids) > 0 {
+        fmt.Printf("Board is alive: magic ID = 0x%x\n", magicids[0])
+    }
+    r.towrite <- rr
+    r.hw.ConfigDevice()
+}
+
+func (r Reader) SwapClocks() {
+    fmt.Printf("HW%d: Swapping clock.\n", r.hw.Num)
+    pack := ipbus.MakePacket(ipbus.Control)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 1, &pack)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("clk_sel", 1, &pack)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 0, &pack)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(pack, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
+
+func (r Reader) Align() {
+    fmt.Printf("HW%d: Doing alignment.\n", )
+    // Get alignment constants
+    shifts:= []uint32{}
+    incs := []uint32{}
+    pack := ipbus.MakePacket(ipbus.Control)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("idelctrl_rst", 1, &pack)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("idelctrl_rst", 1, &pack)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("idelctrl_rst", 0, &pack)
+    reply := make(chan data.ReqResp)
+    ch_inv := make([]uint32, 0, 38)
+    ch_delay := make([]uint32, 0, 38)
+    for i := 0; i < 38; i++ {
+        ch_delay = append(ch_delay, 0xb)
+        if i < 19 {
+            ch_inv = append(ch_inv, 1)
+        } else {
+            ch_inv = append(ch_inv, 0)
+        }
+    }
+    r.hw.Send(pack, reply)
+    rr := <-reply
+    r.towrite <-rr
+    pack = ipbus.MakePacket(ipbus.Control)
+    chctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["chan_ctrl"]
+    increg := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    for ch := uint32(0); ch < 38; ch++ {
+        r.hw.Module.Registers["csr"].Words["ctrl"].Write(ch, &pack)
+        chctrl.MaskedWrite("invert", ch_inv[ch], &pack)
+        chctrl.MaskedWrite("sync_en", 1, &pack)
+        chctrl.MaskedWrite("phase", 1, &pack)
+        chctrl.MaskedWrite("shift", shifts[ch], &pack)
+        chctrl.MaskedWrite("src_sel", 0, &pack)
+        for i := uint32(0); i < incs[ch]; i++ {
+            increg.MaskedWrite("inc", 1, &pack)
+            increg.MaskedWrite("inc", 0, &pack)
+        }
+        chctrl.MaskedWrite("sync_en", 0, &pack)
+    }
+    for ch := uint32(0); ch < 38; ch++ {
+        chctrl.MaskedWrite("sync_en", 1, &pack)
+    }
+    fmt.Printf("Made alignment packet with %d transactions.\n",
+               len(pack.Transactions))
+    r.hw.Send(pack, reply)
+    rr = <-reply
+    r.towrite <-rr
 }
 
 
@@ -342,8 +404,8 @@ func (c *Control) Start() data.ErrPack {
     return err
 }
 
-func (c *Control) AddFPGA(addr *net.UDPAddr) {
-    hw := hw.NewHW(len(c.hws), addr, time.Second, c.errs)
+func (c *Control) AddFPGA(mod glibxml.Module) {
+    hw := hw.NewHW(len(c.hws), mod, time.Second, c.errs)
     c.hws = append(c.hws, hw)
 }
 

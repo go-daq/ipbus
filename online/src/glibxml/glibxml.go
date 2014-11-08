@@ -19,6 +19,8 @@ func Parse(name, filename string) (Module, error) {
     for _, conn := range conns {
         id := conn.As("", "id")
         if id == name {
+            ip := conn.As("", "uri")
+            ip = strings.Replace(ip, "ipbusudp-2.0://", "", 1)
             fn := conn.As("", "address_table")
             fn = strings.Replace(fn, "file://", "", 1)
             xmldoc := xmlx.New()
@@ -27,13 +29,13 @@ func Parse(name, filename string) (Module, error) {
                 return Module{}, err
             }
             modnode := xmldoc.SelectNode("", "module")
-            return NewModule(modnode)
+            return NewModule(ip, modnode)
         }
     }
     return Module{}, fmt.Errorf("XML file for connection '%s' not found in %s.", name, filename)
 }
 
-func NewModule(node *xmlx.Node) (Module, error) {
+func NewModule(ip string, node *xmlx.Node) (Module, error) {
     id := node.As("", "id")
     addr := uint32(0)
     if node.HasAttr("", "address") {
@@ -70,7 +72,7 @@ func NewModule(node *xmlx.Node) (Module, error) {
     submods := make(map[string]Module)
     for _, m := range submodnodes[1:] {
         fmt.Printf("Need to also parse sub-module: %s\n", m)
-        submod, err := NewModule(m)
+        submod, err := NewModule(ip, m)
         if err != nil {
             return Module{}, err
         }
@@ -85,11 +87,12 @@ func NewModule(node *xmlx.Node) (Module, error) {
         }
         ports[port.ID] = port
     }
-    m := Module{id, addr, regs, submods, ports}
+    m := Module{ip, id, addr, regs, submods, ports}
     return m, nil
 }
 
 type Module struct {
+    IP string
     ID string
     Address uint32
     Registers map[string]register
