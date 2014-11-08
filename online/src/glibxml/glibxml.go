@@ -127,7 +127,7 @@ type port struct {
 
 func (p port) Read(size uint8, pack * ipbus.Packet) {
     tr := ipbus.MakeReadNonInc(size, p.GAddress)
-    pack.Transactions = append(pack.Transactions, tr)
+    pack.Add(tr)
 }
 
 func (p port) GetReads(rr data.ReqResp) [][]uint32 {
@@ -191,12 +191,12 @@ func (r register) String() string {
 
 func (r register) Write(data []byte, pack *ipbus.Packet) {
     tr := ipbus.MakeWrite(r.GAddress, data)
-    pack.Transactions = append(pack.Transactions, tr)
+    pack.Add(tr)
 }
 
 func (r register) Read(size uint8, pack * ipbus.Packet) {
     tr := ipbus.MakeRead(size, r.GAddress)
-    pack.Transactions = append(pack.Transactions, tr)
+    pack.Add(tr)
 }
 
 func (r register) GetReads(reqresp data.ReqResp) [][]uint32 {
@@ -236,12 +236,12 @@ func (w word) String() string {
 
 func (w word) Read(pack * ipbus.Packet) {
     tr := ipbus.MakeRead(1, w.GAddress)
-    pack.Transactions = append(pack.Transactions, tr)
+    pack.Add(tr)
 }
 
 func (w word) ReadNonInc(size uint8, pack * ipbus.Packet) {
     tr := ipbus.MakeReadNonInc(1, w.GAddress)
-    pack.Transactions = append(pack.Transactions, tr)
+    pack.Add(tr)
 }
 
 func (w word) GetReads(reqresp data.ReqResp) [][]uint32 {
@@ -327,11 +327,11 @@ func (r word) Write(value uint32, pack * ipbus.Packet) {
         data[i] = uint8((value & mask) >> shift)
     }
     tr := ipbus.MakeWrite(r.GAddress, data)
-    pack.Transactions = append(pack.Transactions, tr)
+    pack.Add(tr)
 }
 
-func (r word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error {
-    mask, ok := r.Masks[name]
+func (w word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error {
+    mask, ok := w.Masks[name]
     if !ok {
         return fmt.Errorf("MakedWrite failed, unknown mask: %s", name)
     }
@@ -346,8 +346,9 @@ func (r word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error 
     x := uint32(0xffffffff) & value
     x = x | (0xffffffff ^ mask)
     y := value
-    tr := ipbus.MakeRMWbits(r.GAddress, x, y)
-    pack.Transactions = append(pack.Transactions, tr)
+    fmt.Printf("Masked write of %s:%s, GAddress = 0x%x, and term = 0x%x, or = x%x.\n", w.ID, name, w.GAddress, x, y)
+    tr := ipbus.MakeRMWbits(w.GAddress, x, y)
+    pack.Add(tr)
     return nil
 }
 

@@ -174,9 +174,9 @@ func MakeWriteNonInc(addr uint32, data []byte) Transaction {
 func MakeRMWbits(addr uint32, and uint32, or uint32) Transaction {
 	body := make([]byte, 12)
 	for i := uint(0); i < 4; i++ {
-		body[i] = byte((addr & (0xff << (8 * i))) >> (8 * i))
-		body[i+4] = byte((and & (0xff << (8 * i))) >> (8 * i))
-		body[i+8] = byte((or & (0xff << (8 * i))) >> (8 * i))
+		body[i] = byte((addr & (0xff << (8 * (3 - i)))) >> (8 * (3 - i)))
+		body[i+4] = byte((and & (0xff << (8 * (3 - i)))) >> (8 * (3 - i)))
+		body[i+8] = byte((or & (0xff << (8 * (3 - i)))) >> (8 * (3 - i)))
 	}
 	return MakeTransaction(Version, 0, 1, RMWbits, Request, body)
 }
@@ -570,8 +570,9 @@ func (s *StatusResp) Parse(data []byte) error {
     }
     loc += 4
     s.Next = 0
-    s.Next += uint32(data[loc + 1] << 8)
+    s.Next += uint32(data[loc + 1]) << 8
     s.Next += uint32(data[loc + 2])
+    fmt.Printf("s.Next = 0x%d : %x%x\n", s.Next, data[loc + 1], data[loc + 2])
     loc += 4
     for i := 0; i < 16; i++ {
         s.IncomingHistory = append(s.IncomingHistory, NewHistory(uint8(data[loc + i])))

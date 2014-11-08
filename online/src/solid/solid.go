@@ -63,6 +63,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     ctrl.MaskedWrite("buf_rst", 0, &triggerpack)
     ctrl.MaskedWrite("trig", 1, &triggerpack)
     ctrl.MaskedWrite("trig", 0, &triggerpack)
+    fmt.Printf("Software trigger packet = %v\n", triggerpack)
     trigsent := false
     readchan := uint32(0)
     //samplesread := uint32(0)
@@ -74,6 +75,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // Each read can request up to 255 words. To fit within one packet
         // the maximum is read 255, read 108, read size
         if !trigsent {
+            //fmt.Println("Sending software trigger.")
             r.hw.Send(triggerpack, r.read)
             readchan = 0
             //samplesread = 0
@@ -93,8 +95,9 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             chanselect.Write(readchan, &p)
             chanselect.Read(&p)
             fpgabuffer.Read(255, &p)
-            fpgabuffer.Read(249, &p)
+//            fpgabuffer.Read(249, &p)
             //samplesread = 255 + 249
+            //fmt.Printf("Sending read for channel %d.\n", readchan)
             readchan += 1
             if readchan >= 38 {
                 trigsent = false
@@ -109,6 +112,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // Get replies from the read request, send data to writer's channel and
         // sleep for period based upon Number of words ready to read
         case data := <-r.read:
+            //fmt.Printf("Received reply: %v\n", data)
             r.towrite <- data
         }
     }
@@ -430,6 +434,7 @@ func (c Control) config() error {
 }
 
 func (c Control) startacquisition() {
+    /*
     modeaddr := uint32(0xaabbccdd)
     start := []byte{0xff, 0xff, 0xff, 0xff}
     pack := ipbus.MakePacket(ipbus.Control)
@@ -452,9 +457,11 @@ func (c Control) startacquisition() {
         }
     }
     fmt.Println("Finished startacquisition()")
+    */
 }
 
 func (c Control) stopacquisition() {
+    /*
     modeaddr := uint32(0xaabbccdd)
     start := []byte{0x0, 0x0, 0x0, 0x0}
     pack := ipbus.MakePacket(ipbus.Control)
@@ -477,6 +484,7 @@ func (c Control) stopacquisition() {
         }
     }
     fmt.Println("Finished stopacquisition()")
+    */
 }
 
 // Start and stop a run
