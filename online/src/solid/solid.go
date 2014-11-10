@@ -69,7 +69,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     //samplesread := uint32(0)
     //wfsize := uint32(2048)
     fpgabuffer := r.hw.Module.Ports["chan"]
-    chanselect := r.hw.Module.Registers["ctrl"].Words["chan_sel"]
+    chanselect := r.hw.Module.Registers["csr"].Words["ctrl"]
     for running {
         // send a request to read MPPC data buffer then read remaining length
         // Each read can request up to 255 words. To fit within one packet
