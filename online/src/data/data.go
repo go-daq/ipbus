@@ -193,7 +193,8 @@ func (r *ReqResp) Decode() error {
 }
 
 func CreateReqResp(req ipbus.Packet) ReqResp {
-    return ReqResp{Out: req}
+    b := make([]byte, 5000)
+    return ReqResp{Out: req, Bytes: b}
 }
 
 func Clean(name string, errs chan ErrPack) {

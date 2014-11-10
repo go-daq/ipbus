@@ -346,7 +346,7 @@ func (w word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error 
     x := uint32(0xffffffff) & value
     x = x | (0xffffffff ^ mask)
     y := value
-    fmt.Printf("Masked write of %s:%s, GAddress = 0x%x, and term = 0x%x, or = x%x.\n", w.ID, name, w.GAddress, x, y)
+    //fmt.Printf("Masked write of %s:%s, GAddress = 0x%x, and term = 0x%x, or = x%x.\n", w.ID, name, w.GAddress, x, y)
     tr := ipbus.MakeRMWbits(w.GAddress, x, y)
     pack.Add(tr)
     return nil
