@@ -92,10 +92,10 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             // For initial testing I'll just grab as much data as I can in 
             // a single packet.
             p := ipbus.MakePacket(ipbus.Control)
-            chanselect.Write(readchan, &p)
+            chanselect.MaskedWrite("chan_sel", readchan, &p)
             chanselect.Read(&p)
             fpgabuffer.Read(255, &p)
-//            fpgabuffer.Read(249, &p)
+            fpgabuffer.Read(100, &p)
             //samplesread = 255 + 249
             //fmt.Printf("Sending read for channel %d.\n", readchan)
             readchan += 1
@@ -244,6 +244,8 @@ func (w Writer) Run(errs chan data.ErrPack) {
                 nbytes += len(rr.Bytes)
                 if nbytes > target {
                     fmt.Printf("Writer received %d bytes.\n", nbytes)
+                    fmt.Printf("Last packet: %d and %d bytes.\n", rr.RespIndex, rr.RespSize)
+                    fmt.Printf("towrite = %d of %d.\n", len(w.towrite), cap(w.towrite))
                     for nbytes > target {
                         target *= 10
                     }
@@ -299,8 +301,8 @@ func (w *Writer) end() error {
 
 // Create the output file and write run header.
 func (w *Writer) create(r data.Run) error {
-    layout := "1504_02Jan2006"
-    fn := fmt.Sprintf("SM1_%d_%s_%s.bin", r.Num, r.Start.Format(layout),
+    layout := "02Jan2006_1504"
+    fn := fmt.Sprintf("SM1_%s_run%d_%s.bin", r.Start.Format(layout), r.Num,
                       r.Name)
     err := error(nil)
     fn = filepath.Join(w.dir, fn)
@@ -380,7 +382,7 @@ func (c *Control) Start() data.ErrPack {
     }
     // Set up the writer
     c.runtowriter = make(chan data.Run)
-    c.datatowriter = make(chan data.ReqResp, 100)
+    c.datatowriter = make(chan data.ReqResp, 1000)
     c.w = NewWriter(c.datatowriter, c.runtowriter, c.outpdir)
     go c.w.Run(c.errs)
     // Set up a HW and reader for each FPGA
