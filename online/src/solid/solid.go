@@ -66,8 +66,8 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     fmt.Printf("Software trigger packet = %v\n", triggerpack)
     trigsent := false
     readchan := uint32(0)
-    //samplesread := uint32(0)
-    //wfsize := uint32(2048)
+    samplesread := uint32(0)
+    wfsize := uint32(2048)
     fpgabuffer := r.hw.Module.Ports["chan"]
     chanselect := r.hw.Module.Registers["csr"].Words["ctrl"]
     for running {
@@ -89,18 +89,37 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             // 256 * 4 = 1024 bytes to read 255 words
             // 250 * 4 = 1000 bytes to read 249 words
             // total = 4 + 4 + 8 + 1024 + 1000 = 2040 = MTU
+            // Real testing makes it seem like the 1500 byte normal UDP limit 
+            // not the 2040 reported by the GLIB is enforced.
             // For initial testing I'll just grab as much data as I can in 
             // a single packet.
             p := ipbus.MakePacket(ipbus.Control)
-            chanselect.MaskedWrite("chan_sel", readchan, &p)
+            if samplesread == 0 {
+                chanselect.MaskedWrite("chan_sel", readchan, &p)
+            }
             chanselect.Read(&p)
-            fpgabuffer.Read(255, &p)
-            fpgabuffer.Read(100, &p)
+            toread := wfsize - samplesread
+            if toread > 355 {
+                fpgabuffer.Read(255, &p)
+                fpgabuffer.Read(100, &p)
+                samplesread += 355
+            } else {
+                if toread > 255 {
+                    fpgabuffer.Read(255, &p)
+                    toread -= 255
+                    samplesread += 255
+                }
+                fpgabuffer.Read(uint8(toread), &p)
+                samplesread += toread
+            }
             //samplesread = 255 + 249
             //fmt.Printf("Sending read for channel %d.\n", readchan)
-            readchan += 1
-            if readchan >= 38 {
-                trigsent = false
+            if samplesread == wfsize {
+                readchan += 1
+                samplesread = 0
+                if readchan >= 38 {
+                    trigsent = false
+                }
             }
             r.hw.Send(p, r.read)
         }
