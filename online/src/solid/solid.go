@@ -325,7 +325,7 @@ func (w *Writer) end() error {
         version := 0
         info, _ := os.Stat(newname)
         for info != nil {
-            part := fmt.Sprintf("_%s.bin", version)
+            part := fmt.Sprintf("_n%d.bin", version)
             newname = strings.Replace(testname, ".bin", part, 1)
             info, _ = os.Stat(newname)
             version += 1
