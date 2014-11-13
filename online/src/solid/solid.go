@@ -238,6 +238,7 @@ func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
 func (w Writer) Run(errs chan data.ErrPack) {
     defer data.Clean("Writer.Run()", errs)
     defer close(w.Quit)
+    tick := time.NewTicker(60 * time.Second)
     nbytes := 0
     target := 10
     running := true
@@ -246,6 +247,9 @@ func (w Writer) Run(errs chan data.ErrPack) {
         if w.open {
             //fmt.Printf("Waiting for packet to write.\n")
             select {
+            case <-tick.C:
+                fmt.Printf("Writer received %d bytes. Buffer %d of %d.\n",
+                           nbytes, len(w.towrite), cap(w.towrite))
             case rr := <-w.towrite:
                 // Write binary to disk
                 towrite, err := rr.Encode()
