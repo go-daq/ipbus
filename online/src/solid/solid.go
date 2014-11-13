@@ -14,6 +14,7 @@ import (
     "net"
     "os"
     "os/signal"
+    "strings"
     "time"
 )
 
@@ -319,7 +320,16 @@ func (w *Writer) end() error {
     if (w.store != "") {
         oldname := w.outp.Name()
         _, oldfnname := filepath.Split(oldname)
-        newname := filepath.Join(w.store, oldfnname)
+        testname := filepath.Join(w.store, oldfnname)
+        newname := testname
+        version := 0
+        info, _ := os.Stat(newname)
+        for info != nil {
+            part := fmt.Sprintf("_%s.bin", version)
+            newname = strings.Replace(testname, ".bin", part, 1)
+            info, _ = os.Stat(newname)
+            version += 1
+        }
         err = os.Rename(oldname, newname)
     }
     return err
