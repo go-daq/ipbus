@@ -33,6 +33,8 @@ func cleanexit(e mail.E) {
 func main() {
     dir := flag.String("dir", ".", "output directory")
     period := flag.Int("time", 10, "Length of run [s]")
+    nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
+    store := flag.String("store", "", "Long term storage location.")
     allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
     passfile := flag.String("pass", "pass.txt", "Email password file.")
     flag.Parse()
@@ -48,7 +50,7 @@ func main() {
     }
     runtime.GOMAXPROCS(4)
     fmt.Println("Solid's SM1 online DAQ software!")
-    control := solid.New(*dir)
+    control := solid.New(*dir, *store)
     for i := 0; i < 1; i++ {
         control.AddFPGA(mod)
     }
@@ -59,20 +61,25 @@ func main() {
         e.Log("Error in start:", errp)
         return
     }
+    irun := 0
     dt := time.Duration(*period) * time.Second
-    r, err := data.NewRun(0, "test", dt)
-    if err != nil {
-        panic(err)
+    for *nruns < 0 || irun < *nruns {
+        r, err := data.NewRun(uint32(irun), "test", dt)
+        if err != nil {
+            panic(err)
+        }
+        if r.Commit.Modified && !(*allowmod) {
+            panic(fmt.Errorf("Code has local modifications: %v\n", r.Commit))
+        }
+        errp = control.Run(r)
+        if errp.Err != nil {
+            fmt.Printf("Error in run: %v\n", errp)
+            e.Log("Error in run:", errp)
+        }
+        irun += 1
+        stop := time.Now()
+        fmt.Printf("Stopped running at %v [%v]\n", stop, stop.Sub(r.Start))
     }
-    if r.Commit.Modified && !(*allowmod) {
-        panic(fmt.Errorf("Code has local modifications: %v\n", r.Commit))
-    }
-    errp = control.Run(r)
-    if errp.Err != nil {
-        fmt.Printf("Error in run: %v\n", errp)
-        e.Log("Error in run:", errp)
-    }
-    stop := time.Now()
-    fmt.Printf("Stopped run at %v [%v]\n", stop, stop.Sub(r.Start))
+    fmt.Printf("Stopped all runs.\n")
     control.Quit()
 }

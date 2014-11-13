@@ -220,18 +220,19 @@ func (r Reader) Align() {
 type Writer struct{
     outp *os.File
     open bool
-    dir string
+    dir, store string
     towrite chan data.ReqResp
     fromcontrol chan data.Run
     Quit chan bool
 }
 
 func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
-               outpdir string) *Writer {
-    w := Writer{towrite: towrite, fromcontrol: fromcontrol, dir: outpdir}
+               outpdir, store string) *Writer {
+    w := Writer{towrite: towrite, fromcontrol: fromcontrol, dir: outpdir, store: store}
     w.Quit = make(chan bool)
     return &w
 }
+
 // Write incoming data to disk and clear first four bytes of written data
 func (w Writer) Run(errs chan data.ErrPack) {
     defer data.Clean("Writer.Run()", errs)
@@ -314,6 +315,13 @@ func (w *Writer) end() error {
     }
     w.open = false
     err := w.outp.Close()
+    // If there is a long term storage directory move file there.
+    if (w.store != "") {
+        oldname := w.outp.Name()
+        _, oldfnname := filepath.Split(oldname)
+        newname := filepath.Join(w.store, oldfnname)
+        err = os.Rename(oldname, newname)
+    }
     return err
 }
 
@@ -365,8 +373,8 @@ func (w *Writer) create(r data.Run) error {
     return err
 }
 
-func New(dir string) Control {
-    c := Control{outpdir: dir}
+func New(dir, store string) Control {
+    c := Control{outpdir: dir, store: store}
     c.config()
     c.errs = make(chan data.ErrPack, 100)
     c.signals = make(chan os.Signal)
@@ -376,7 +384,7 @@ func New(dir string) Control {
 
 // Control the online DAQ software
 type Control struct{
-    outpdir string
+    outpdir, store string
     hws []*hw.HW
     packettohws []chan ipbus.Packet
     runtowriter chan data.Run
@@ -402,7 +410,7 @@ func (c *Control) Start() data.ErrPack {
     // Set up the writer
     c.runtowriter = make(chan data.Run)
     c.datatowriter = make(chan data.ReqResp, 1000)
-    c.w = NewWriter(c.datatowriter, c.runtowriter, c.outpdir)
+    c.w = NewWriter(c.datatowriter, c.runtowriter, c.outpdir, c.store)
     go c.w.Run(c.errs)
     // Set up a HW and reader for each FPGA
     fmt.Println("Setting up HW and readers.")
@@ -524,6 +532,7 @@ func (c Control) Run(r data.Run) data.ErrPack {
     err := data.MakeErrPack(error(nil))
     select {
     case <-tick.C:
+        fmt.Printf("Run stopped due to ticker.\n")
     case err = <-c.errs:
         fmt.Printf("Control.Run() found an error.\n")
     case <-c.signals:
