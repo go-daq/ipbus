@@ -64,6 +64,7 @@ func main() {
     irun := 0
     dt := time.Duration(*period) * time.Second
     for *nruns < 0 || irun < *nruns {
+        fmt.Printf("Making %dth run.\n", irun)
         r, err := data.NewRun(uint32(irun), "test", dt)
         if err != nil {
             panic(err)

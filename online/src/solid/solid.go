@@ -278,7 +278,6 @@ func (w Writer) Run(errs chan data.ErrPack) {
                     fmt.Printf("Latency = %v\n", dt)
                 }
             case run := <-w.fromcontrol:
-                w.end()
                 if err := w.end(); err != nil {
                     panic(err)
                 }
@@ -307,6 +306,7 @@ func (w Writer) Run(errs chan data.ErrPack) {
 }
 
 func (w *Writer) end() error {
+    fmt.Println("Writer.end()")
     buf := new(bytes.Buffer)
     now := time.Now().UnixNano()
     if err := binary.Write(buf, binary.BigEndian, uint32(0)); err != nil {
@@ -329,7 +329,7 @@ func (w *Writer) end() error {
         version := 0
         info, _ := os.Stat(newname)
         for info != nil {
-            part := fmt.Sprintf("_%s.bin", version)
+            part := fmt.Sprintf("_n%d.bin", version)
             newname = strings.Replace(testname, ".bin", part, 1)
             info, _ = os.Stat(newname)
             version += 1
@@ -347,6 +347,7 @@ func (w *Writer) create(r data.Run) error {
                       r.Name)
     err := error(nil)
     fn = filepath.Join(w.dir, fn)
+    fmt.Printf("Writing to %s\n", fn)
     w.outp, err = os.Create(fn)
     if err != nil {
         return err
