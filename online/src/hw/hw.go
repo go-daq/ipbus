@@ -266,7 +266,7 @@ func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
 		p.ID = h.nextid
         if h.nextid == 65535 {
             h.nextid = 1
-            fmt.Println("Cycled through package IDs.")
+            //fmt.Println("Cycled through package IDs.")
         } else {
             h.nextid += 1
         }
@@ -284,9 +284,11 @@ func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
 }
 
 func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
+    /*
     if p.ID == 1 {
         fmt.Printf("Sending packet with ID = 1: %v\n", p)
     }
+    */
 	// Make ReqResp
 	rr := data.CreateReqResp(p)
 	// encode outgoing packet

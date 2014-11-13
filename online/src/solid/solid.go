@@ -238,18 +238,29 @@ func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
 func (w Writer) Run(errs chan data.ErrPack) {
     defer data.Clean("Writer.Run()", errs)
     defer close(w.Quit)
-    tick := time.NewTicker(60 * time.Second)
-    nbytes := 0
-    target := 10
+    tickdt := 60 * time.Second
+    tick := time.NewTicker(tickdt)
+    nbytes := float64(0.0)
+    lastbytes := float64(0.0)
+    sumlatency := time.Duration(0)
+    npackets := float64(0)
+    maxlatency := time.Duration(0)
     running := true
-    start := time.Now()
     for running {
         if w.open {
             //fmt.Printf("Waiting for packet to write.\n")
             select {
             case <-tick.C:
-                fmt.Printf("Writer received %d bytes. Buffer %d of %d.\n",
-                           nbytes, len(w.towrite), cap(w.towrite))
+                averagelatency := sumlatency.Seconds() * 1000000.0 / npackets
+                writespeed := (nbytes - lastbytes) * 1e-6 / tickdt.Seconds()
+                fmt.Printf("Writing at %0.2f MB/s. Written %0.2f GB total. Buffer %d of %d.\n",
+                           writespeed, nbytes * 1e-9, len(w.towrite), cap(w.towrite))
+                lastbytes = nbytes
+                fmt.Printf("Average latency = %f us, max = %v\n", averagelatency, 
+                           maxlatency)
+                maxlatency = time.Duration(0)
+                sumlatency = time.Duration(0)
+                npackets = 0
             case rr := <-w.towrite:
                 // Write binary to disk
                 towrite, err := rr.Encode()
@@ -266,16 +277,12 @@ func (w Writer) Run(errs chan data.ErrPack) {
                     nwritten += n
                 }
                 //fmt.Println("Writing to disk...")
-                nbytes += len(rr.Bytes)
-                if nbytes > target {
-                    fmt.Printf("Writer received %d bytes.\n", nbytes)
-                    fmt.Printf("Last packet: %d and %d bytes.\n", rr.RespIndex, rr.RespSize)
-                    fmt.Printf("towrite = %d of %d.\n", len(w.towrite), cap(w.towrite))
-                    for nbytes > target {
-                        target *= 10
-                    }
-                    dt := rr.Received.Sub(rr.Sent)
-                    fmt.Printf("Latency = %v\n", dt)
+                nbytes += float64(rr.RespIndex + rr.RespSize)
+                latency := rr.Received.Sub(rr.Sent)
+                sumlatency += latency
+                npackets += 1
+                if latency > maxlatency {
+                    maxlatency = latency
                 }
             case run := <-w.fromcontrol:
                 if err := w.end(); err != nil {
@@ -289,11 +296,6 @@ func (w Writer) Run(errs chan data.ErrPack) {
                 if err := w.end(); err != nil {
                     panic(err)
                 }
-                end := time.Now()
-                runtime := end.Sub(start)
-                rate := float64(nbytes) / runtime.Seconds() / 1000000.0
-                fmt.Printf("Writer received average rate of %v MB/s\n", rate)
-                fmt.Printf("%d bytes in %v.\n", nbytes, runtime)
             }
         } else {
             r := <-w.fromcontrol
