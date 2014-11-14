@@ -7,7 +7,7 @@ import (
     "fmt"
     "mail"
     "solid"
-//    "net"
+    "strings"
     "runtime"
     "time"
 )
@@ -36,6 +36,7 @@ func main() {
     nchans := flag.Int("nchans", 38, "Number of channels per GLIB.")
     nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
     store := flag.String("store", "", "Long term storage location.")
+    glibs := flag.String("glib", "GLIB", "Comma separated string of GLIB module names (e.g. 'GLIB1,GLIB2,GLIB5')")
     allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
     passfile := flag.String("pass", "pass.txt", "Email password file.")
     flag.Parse()
@@ -75,14 +76,19 @@ func main() {
         panic(err)
     }
     defer cleanexit(e)
-    mod, err := glibxml.Parse("GLIB", "nicks_c.xml")
-    if err != nil {
-        panic(err)
+    modnames := strings.Split(*glibs, ",")
+    mods := []glibxml.Module{}
+    for _, modname := range modnames {
+        mod, err := glibxml.Parse(modname, "nicks_c.xml")
+        if err != nil {
+            panic(err)
+        }
+        mods = append(mods, mod)
     }
     runtime.GOMAXPROCS(4)
     fmt.Println("Solid's SM1 online DAQ software!")
     control := solid.New(*dir, *store, channels)
-    for i := 0; i < 1; i++ {
+    for _, mod := range mods {
         control.AddFPGA(mod)
     }
     errp := control.Start()
