@@ -43,10 +43,11 @@ type Reader struct{
     Stop chan bool
     towrite, read chan data.ReqResp
     period, dt time.Duration
+    channels []uint32
 }
 
-func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration) *Reader {
-    r := Reader{hw: hw, towrite: towrite, period: period, dt: dt}
+func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, channels []uint32) *Reader {
+    r := Reader{hw: hw, towrite: towrite, period: period, dt: dt, channels: channels}
     r.Stop = make(chan bool)
     return &r
 }
@@ -66,7 +67,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     ctrl.MaskedWrite("trig", 0, &triggerpack)
     fmt.Printf("Software trigger packet = %v\n", triggerpack)
     trigsent := false
-    readchan := uint32(0)
+    readchan := 0
     samplesread := uint32(0)
     wfsize := uint32(2048)
     fpgabuffer := r.hw.Module.Ports["chan"]
@@ -96,7 +97,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             // a single packet.
             p := ipbus.MakePacket(ipbus.Control)
             if samplesread == 0 {
-                chanselect.MaskedWrite("chan_sel", readchan, &p)
+                chanselect.MaskedWrite("chan_sel", r.channels[readchan], &p)
             }
             chanselect.Read(&p)
             toread := wfsize - samplesread
@@ -118,7 +119,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             if samplesread == wfsize {
                 readchan += 1
                 samplesread = 0
-                if readchan >= 38 {
+                if readchan >= len(r.channels) {
                     trigsent = false
                 }
             }
@@ -390,8 +391,8 @@ func (w *Writer) create(r data.Run) error {
     return err
 }
 
-func New(dir, store string) Control {
-    c := Control{outpdir: dir, store: store}
+func New(dir, store string, channels []uint32) Control {
+    c := Control{outpdir: dir, store: store, channels: channels}
     c.config()
     c.errs = make(chan data.ErrPack, 100)
     c.signals = make(chan os.Signal)
@@ -412,6 +413,7 @@ type Control struct{
     started bool
     errs chan data.ErrPack
     signals chan os.Signal
+    channels []uint32
 }
 
 func (c *Control) Send(nhw int, pack ipbus.Packet, rep chan data.ReqResp) {
@@ -433,7 +435,7 @@ func (c *Control) Start() data.ErrPack {
     fmt.Println("Setting up HW and readers.")
     for _, hw := range c.hws {
         go hw.Run()
-        r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond)
+        r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond, c.channels)
         c.readers = append(c.readers, r)
     }
 

@@ -33,11 +33,42 @@ func cleanexit(e mail.E) {
 func main() {
     dir := flag.String("dir", ".", "output directory")
     period := flag.Int("time", 10, "Length of run [s]")
+    nchans := flag.Int("nchans", 38, "Number of channels per GLIB.")
     nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
     store := flag.String("store", "", "Long term storage location.")
     allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
     passfile := flag.String("pass", "pass.txt", "Email password file.")
     flag.Parse()
+    if *nchans != 38 && *nchans != 76 {
+        panic(fmt.Errorf("Cannot have %d GLIB channels. Must be 38 or 76.", *nchans))
+    }
+    channels := make([]uint32, 0, 76)
+    for ichan := uint32(0); ichan < 8; ichan++ {
+        channels = append(channels, ichan)
+    }
+    for ichan := uint32(10); ichan < 18; ichan++ {
+        channels = append(channels, ichan)
+    }
+    for ichan := uint32(19); ichan < 27; ichan++ {
+        channels = append(channels, ichan)
+    }
+    for ichan := uint32(29); ichan < 37; ichan++ {
+        channels = append(channels, ichan)
+    }
+    if *nchans == 76 {
+        for ichan := uint32(38); ichan < 46; ichan++ {
+            channels = append(channels, ichan)
+        }
+        for ichan := uint32(48); ichan < 56; ichan++ {
+            channels = append(channels, ichan)
+        }
+        for ichan := uint32(57); ichan < 65; ichan++ {
+            channels = append(channels, ichan)
+        }
+        for ichan := uint32(67); ichan < 75; ichan++ {
+            channels = append(channels, ichan)
+        }
+    }
     e := mail.E{}
     err := e.Load(*passfile)
     if err != nil {
@@ -50,7 +81,7 @@ func main() {
     }
     runtime.GOMAXPROCS(4)
     fmt.Println("Solid's SM1 online DAQ software!")
-    control := solid.New(*dir, *store)
+    control := solid.New(*dir, *store, channels)
     for i := 0; i < 1; i++ {
         control.AddFPGA(mod)
     }
