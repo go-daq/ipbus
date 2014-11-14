@@ -343,6 +343,8 @@ func (w *Writer) end() error {
 }
 
 
+var headfootencodeversion = uint16(0xdead)
+
 // Create the output file and write run header.
 func (w *Writer) create(r data.Run) error {
     layout := "02Jan2006_1504"
@@ -357,16 +359,17 @@ func (w *Writer) create(r data.Run) error {
     }
     w.open = true
     /* run header:
+        header/footer version [16 bits], ReqResp encoding version [16 bits]
         header size [32 bit words]
         online software commit - 160 bit sha1 hash
         run start time - 64 bit unit nanoseconds
         target run stop time - 64 bit unit nanoseconds
-        ???
-        ???
     */
-    size := uint32(9)
+    size := uint32(10)
     header := make([]byte, 0, size * 4)
     buf := new(bytes.Buffer)
+    err = binary.Write(buf, binary.BigEndian, headfootencodeversion)
+    err = binary.Write(buf, binary.BigEndian, data.ReqRespEncodeVersion)
     err = binary.Write(buf, binary.BigEndian, size)
     header = append(header, buf.Bytes()...)
     buf.Reset()
