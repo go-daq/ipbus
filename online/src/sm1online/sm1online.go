@@ -2,11 +2,12 @@ package main
 
 import (
     "data"
-    "mail"
+    "glibxml"
     "flag"
     "fmt"
+    "mail"
     "solid"
-    "net"
+//    "net"
     "runtime"
     "time"
 )
@@ -30,7 +31,6 @@ func cleanexit(e mail.E) {
 
 
 func main() {
-    addr := flag.String("addr", "localhost", "remote adress")
     dir := flag.String("dir", ".", "output directory")
     period := flag.Int("time", 10, "Length of run [s]")
     allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
@@ -42,17 +42,15 @@ func main() {
         panic(err)
     }
     defer cleanexit(e)
+    mod, err := glibxml.Parse("GLIB", "nicks_c.xml")
+    if err != nil {
+        panic(err)
+    }
     runtime.GOMAXPROCS(4)
     fmt.Println("Solid's SM1 online DAQ software!")
     control := solid.New(*dir)
-    for i := 0; i < 5; i++ {
-        loc := fmt.Sprintf("%s:%d", *addr, 9988 + i)
-        addr, err := net.ResolveUDPAddr("udp", loc)
-        if err != nil {
-            panic(err)
-        }
-        fmt.Printf("Adding FPGA at %v\n", addr)
-        control.AddFPGA(addr)
+    for i := 0; i < 1; i++ {
+        control.AddFPGA(mod)
     }
     errp := control.Start()
     if errp.Err != nil {

@@ -19,7 +19,7 @@ func listen(loc string, drop bool) {
         panic(err)
     }
     fakedata := make([]byte, 0, 1024)
-    order := []byte{0x00, 0x00, 0x00, 0x12, 0x89, 0xab, 0xcd, 0xef}
+    order := []byte{0xde, 0xad, 0xbe, 0xef, 0x89, 0xab, 0xcd, 0xef}
     for i := 0; i < 1024; i++ {
         fakedata = append(fakedata, order[i % len(order)])
     }
@@ -113,14 +113,14 @@ func listen(loc string, drop bool) {
                 rp := ipbus.MakePacket(ipbus.Control)
                 rp.ID = p.ID
                 for _, t := range p.Transactions {
-                    if t.Type == ipbus.Read {
+                    if t.Type == ipbus.Read || t.Type == ipbus.ReadNonInc {
                         //fmt.Printf("Read transaction requesting %d words from %x [%v].\n", t.Words, t.Body, t)
                         nt += 1
                         //time.Sleep(10 * time.Millisecond)
                         reply := ipbus.MakeReadReply(fakedata[:4 * int(t.Words)])
                         //fmt.Printf("reply = %v\n", reply)
                         rp.Add(reply)
-                    } else if t.Type == ipbus.Write {
+                    } else if t.Type == ipbus.Write  || t.Type == ipbus.WriteNonInc {
                         nt += 1
                         reply := ipbus.MakeWriteReply(t.Words)
                         rp.Add(reply)
