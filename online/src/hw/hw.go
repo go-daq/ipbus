@@ -395,6 +395,7 @@ func (m *chanmap) run() {
                 err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
             }
             m.m[req.val.id] = req.val.c
+            m.exists[req.val.id] = true
             /*
             if _, ok := m.m[req.val.id]; ok {
                 err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
