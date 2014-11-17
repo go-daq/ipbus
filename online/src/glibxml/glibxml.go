@@ -210,23 +210,26 @@ func newword(node *xmlx.Node, regaddr uint32) (word, error) {
     if err != nil {
         return word{}, err
     }
-    masks := make(map[string]uint32)
     masknodes := node.SelectNodes("", "mask")
-    for _, m := range masknodes {
+    masks := make([]uint32, len(masknodes))
+    maskindices := make(map[string]int)
+    for i, m := range masknodes {
         mask, err := newmask(m)
         if err != nil {
             return word{}, err
         }
-        masks[mask.ID] = mask.Mask
+        maskindices[mask.ID] = i
+        masks[i] = mask.Mask
     }
-    w := word{id, uint32(address), uint32(address) + regaddr, masks}
+    w := word{id, uint32(address), uint32(address) + regaddr, maskindices, masks}
     return w, nil
 }
 
 type word struct {
     ID string
     LAddress, GAddress uint32
-    Masks map[string]uint32
+    MaskIndices map[string]int
+    Masks []uint32
 }
 
 func (w word) String() string {
@@ -249,10 +252,18 @@ func (w word) GetReads(reqresp data.ReqResp) [][]uint32 {
 }
 
 func (w word) GetMaskedReads(mask string, reqresp data.ReqResp) []uint32 {
-    m, ok := w.Masks[mask]
+    n, ok := w.MaskIndices[mask]
     if !ok {
         return []uint32{}
     }
+    return w.GetMaskedReadsIndex(n, reqresp)
+}
+
+func (w word) GetMaskedReadsIndex(n int, reqresp data.ReqResp) []uint32 {
+    if n >= len(w.Masks) {
+        return []uint32{}
+    }
+    m := w.Masks[n]
     shift := uint32(0)
     for i := uint32(0); i < 32; i++ {
         if m & (0x1 << i) > 0 {
@@ -331,10 +342,18 @@ func (r word) Write(value uint32, pack * ipbus.Packet) {
 }
 
 func (w word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error {
-    mask, ok := w.Masks[name]
+    n, ok := w.MaskIndices[name]
     if !ok {
-        return fmt.Errorf("MakedWrite failed, unknown mask: %s", name)
+        return fmt.Errorf("Fail to do masked read with unknown mask named %s", name)
     }
+    return w.MaskedWriteIndex(n, value, pack)
+}
+
+func (w word) MaskedWriteIndex(n int, value uint32, pack *ipbus.Packet) error {
+    if n >= len(w.Masks) {
+        return fmt.Errorf("Masked write failed, index %d out of range.", n)
+    }
+    mask := w.Masks[n]
     shift := uint32(0)
     for i := uint32(0); i < 32; i++ {
         if mask & (0x1 << i) > 0 {

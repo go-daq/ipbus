@@ -72,6 +72,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     wfsize := uint32(2048)
     fpgabuffer := r.hw.Module.Ports["chan"]
     chanselect := r.hw.Module.Registers["csr"].Words["ctrl"]
+    chanselectindex := chanselect.MaskIndices["chan_sel"]
     for running {
         // send a request to read MPPC data buffer then read remaining length
         // Each read can request up to 255 words. To fit within one packet
@@ -97,7 +98,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             // a single packet.
             p := ipbus.MakePacket(ipbus.Control)
             if samplesread == 0 {
-                chanselect.MaskedWrite("chan_sel", r.channels[readchan], &p)
+                chanselect.MaskedWriteIndex(chanselectindex, r.channels[readchan], &p)
             }
             chanselect.Read(&p)
             toread := wfsize - samplesread
