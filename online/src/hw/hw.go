@@ -366,13 +366,15 @@ func addchan(id uint16, c chan data.ReqResp) chanmapreq {
 }
 
 type chanmap struct {
-    m map[uint16] chan data.ReqResp
+    m []chan data.ReqResp
+    exists []bool
     add, remove, read chan chanmapreq
 }
 
 func newchanmap() chanmap {
     return chanmap{
-        m: make(map[uint16] chan data.ReqResp),
+        m: make([]chan data.ReqResp, 65536),
+        exists: make([]bool, 65536),
         add: make(chan chanmapreq),
         remove: make(chan chanmapreq),
         read: make(chan chanmapreq),
@@ -389,23 +391,39 @@ func (m *chanmap) run() {
                 break
             }
             err := error(nil)
+            if m.exists[req.val.id] {
+                err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
+            }
+            m.m[req.val.id] = req.val.c
+            /*
             if _, ok := m.m[req.val.id]; ok {
                 err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
             }
             m.m[req.val.id] = req.val.c
+            */
             req.val.err = err
             req.rep <- req.val
         case req := <-m.remove:
             err := error(nil)
+            if !m.exists[req.val.id] {
+                err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
+            }
+            m.exists[req.val.id] = false
+            /*
             if _, ok := m.m[req.val.id]; !ok {
                 err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
             } else {
                 delete(m.m, req.val.id)
             }
+            */
             req.val.err = err
             req.rep <- req.val
         case req := <-m.read:
+            req.val.ok = m.exists[req.val.id]
+            req.val.c = m.m[req.val.id]
+            /*
             req.val.c, req.val.ok = m.m[req.val.id]
+            */
             req.rep <- req.val
         }
     }
