@@ -257,8 +257,10 @@ func (w Writer) Run(errs chan data.ErrPack) {
                 writespeed := (nbytes - lastbytes) * 1e-6 / tickdt.Seconds()
                 fmt.Printf("Writing at %0.2f MB/s. Written %0.2f GB total. Buffer %d of %d.\n",
                            writespeed, nbytes * 1e-9, len(w.towrite), cap(w.towrite))
+                ipbusspeed := (nbytes - lastbytes) * 1e-6 / sumlatency.Seconds()
+                fmt.Printf("Average IPBus transport rate = %0.2f MB / s\n", ipbusspeed)
                 lastbytes = nbytes
-                fmt.Printf("Average latency = %f us, max = %v\n", averagelatency, 
+                fmt.Printf("Average latency = %0.2f us, max = %v\n", averagelatency, 
                            maxlatency)
                 maxlatency = time.Duration(0)
                 sumlatency = time.Duration(0)
