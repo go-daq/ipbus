@@ -109,7 +109,7 @@ func main() {
         if r.Commit.Modified && !(*allowmod) {
             panic(fmt.Errorf("Code has local modifications: %v\n", r.Commit))
         }
-        errp = control.Run(r)
+        quit, errp := control.Run(r)
         if errp.Err != nil {
             fmt.Printf("Error in run: %v\n", errp)
             e.Log("Error in run:", errp)
@@ -117,6 +117,9 @@ func main() {
         irun += 1
         stop := time.Now()
         fmt.Printf("Stopped running at %v [%v]\n", stop, stop.Sub(r.Start))
+        if quit {
+            break
+        }
     }
     fmt.Printf("Stopped all runs.\n")
     control.Quit()

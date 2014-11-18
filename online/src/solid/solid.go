@@ -72,6 +72,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     wfsize := uint32(2048)
     fpgabuffer := r.hw.Module.Ports["chan"]
     chanselect := r.hw.Module.Registers["csr"].Words["ctrl"]
+    chanselectindex := chanselect.MaskIndices["chan_sel"]
     for running {
         // send a request to read MPPC data buffer then read remaining length
         // Each read can request up to 255 words. To fit within one packet
@@ -97,7 +98,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             // a single packet.
             p := ipbus.MakePacket(ipbus.Control)
             if samplesread == 0 {
-                chanselect.MaskedWrite("chan_sel", r.channels[readchan], &p)
+                chanselect.MaskedWriteIndex(chanselectindex, r.channels[readchan], &p)
             }
             chanselect.Read(&p)
             toread := wfsize - samplesread
@@ -431,7 +432,7 @@ func (c *Control) Start() data.ErrPack {
     }
     // Set up the writer
     c.runtowriter = make(chan data.Run)
-    c.datatowriter = make(chan data.ReqResp, 1000)
+    c.datatowriter = make(chan data.ReqResp, 100000)
     c.w = NewWriter(c.datatowriter, c.runtowriter, c.outpdir, c.store)
     go c.w.Run(c.errs)
     // Set up a HW and reader for each FPGA
@@ -539,7 +540,7 @@ func (c Control) stopacquisition() {
 }
 
 // Start and stop a run
-func (c Control) Run(r data.Run) data.ErrPack {
+func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     dt := r.End.Sub(time.Now())
     tick := time.NewTicker(dt)
     // Tell the writer to start a new file
@@ -552,6 +553,7 @@ func (c Control) Run(r data.Run) data.ErrPack {
     c.startacquisition()
     fmt.Printf("Run control waiting for %v.\n", dt)
     err := data.MakeErrPack(error(nil))
+    quit := false
     select {
     case <-tick.C:
         fmt.Printf("Run stopped due to ticker.\n")
@@ -559,6 +561,7 @@ func (c Control) Run(r data.Run) data.ErrPack {
         fmt.Printf("Control.Run() found an error.\n")
     case <-c.signals:
         fmt.Printf("Run stopped by ctrl-c.\n")
+        quit = true
     }
     // Stop the FPGAs
     // Really I should do this unless the error is something that would cause
@@ -568,7 +571,7 @@ func (c Control) Run(r data.Run) data.ErrPack {
         r.Stop <- true
     }
     tick.Stop()
-    return err
+    return quit, err
 }
 
 // Cleanly stop the online DAQ software
