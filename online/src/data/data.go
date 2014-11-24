@@ -122,7 +122,7 @@ func (r *ReqResp) ClearReply() {
     }
 }
 
-var ReqRespEncodeVersion = uint16(0xffff)
+var ReqRespEncodeVersion = uint16(0x0000)
 
 func (r ReqResp) Encode() ([]byte, error) {
     out := make([]byte, 0, len(r.Bytes) + 32)
@@ -137,10 +137,10 @@ func (r ReqResp) Encode() ([]byte, error) {
     }
     ip := net.ParseIP(host)
     ipv4 := []byte(ip[12:])
-    out = append(out, ipv4...)
+    //out = append(out, ipv4...)
     out = append(out, uint8(ipv4[3]))
     out = append(out, uint8(0))
-    words := uint16(len(r.Bytes) / 4) + 6
+    words := uint16(len(r.Bytes) / 4) + 4
     out = append(out, uint8((words & 0xff00) >> 8))
     out = append(out, uint8((words & 0x00ff)))
     sentnano := r.Sent.UnixNano()

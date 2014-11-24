@@ -346,7 +346,7 @@ func (w *Writer) end() error {
 }
 
 
-var headfootencodeversion = uint16(0xdead)
+var headfootencodeversion = uint16(0x0)
 
 // Create the output file and write run header.
 func (w *Writer) create(r data.Run) error {

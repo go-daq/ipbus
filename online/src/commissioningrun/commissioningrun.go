@@ -85,7 +85,7 @@ func main() {
         }
         mods = append(mods, mod)
     }
-    runtime.GOMAXPROCS(4)
+    runtime.GOMAXPROCS(6)
     fmt.Println("Solid's SM1 online DAQ software!")
     control := solid.New(*dir, *store, channels)
     for _, mod := range mods {
