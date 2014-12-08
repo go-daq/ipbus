@@ -123,6 +123,7 @@ func (h *HW) Run() {
         go h.ConfigDevice()
 	}
 	running := true
+    ntimeout := 0
 	for running {
 		//fmt.Printf("HW %v: expecting info from chan at %p\n", h, &h.tosend)
 		p, ok := <-h.tosend
@@ -228,10 +229,16 @@ func (h *HW) Run() {
                     h.irecent += 1
                     if timedout {
                         fmt.Printf("HW%d: Handled a lost packet: %v\n", h.Num, reply)
+                        ntimeout = 0
                     }
 				}
             case now := <-tick.C:
 				// handle timed out request
+                ntimeout += 1
+                if ntimeout > 10 {
+                    running = false
+                    panic(fmt.Errorf("HW%d: %d lost packets in a row.", h.Num, ntimeout))
+                }
 				fmt.Printf("HW%d: Transaction %v timed out %v at %v\n", h.Num, rr, h.timeout, now)
 				timedout = true
 				lost = &rr
