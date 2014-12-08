@@ -44,16 +44,168 @@ type Reader struct{
     towrite, read chan data.ReqResp
     period, dt time.Duration
     channels []uint32
+    thresholds map[uint32]uint32
 }
 
-func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, channels []uint32) *Reader {
-    r := Reader{hw: hw, towrite: towrite, period: period, dt: dt, channels: channels}
+func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, channels []uint32, thresholds map[uint32]uint32) *Reader {
+    r := Reader{hw: hw, towrite: towrite, period: period, dt: dt, channels: channels, thresholds: thresholds}
     r.Stop = make(chan bool)
     return &r
 }
 
+func (r *Reader) TriggerWindow(length, offset uint32) {
+    reply := make(chan data.ReqResp)
+    reg := r.hw.Module.Registers["csr"].Words["window_ctrl"]
+    p := ipbus.MakePacket(ipbus.Control)
+    reg.MaskedWrite("lag", offset, &p)
+    reg.MaskedWrite("size", length, &p)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
+
+func (r *Reader) StartSelfTriggers() {
+    reply := make(chan data.ReqResp)
+    ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
+    threshold := r.hw.Module.Registers["csr"].Words["chan_t_thresh"]
+    for _, ch := range r.channels {
+        p := ipbus.MakePacket(ipbus.Control)
+        ctrl.MaskedWrite("chan_sel", ch, &p)
+        chanctrl.MaskedWrite("src_sel", 1, &p)
+        threshold.Write(r.thresholds[ch], &p)
+        chanctrl.MaskedWrite("ro_en", 1, &p)
+        chanctrl.MaskedWrite("trig_en", 1, &p)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        r.towrite <- rr
+    }
+}
+
+func (r *Reader) StartRandomTriggers() {
+    reply := make(chan data.ReqResp)
+    ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
+
+    // Enable readout for random triggers
+    for _, ch := range r.channels {
+        p := ipbus.MakePacket(ipbus.Control)
+        ctrl.MaskedWrite("chan_sel", ch, &p)
+        chanctrl.MaskedWrite("src_sel", 1, &p)
+        chanctrl.MaskedWrite("ro_en", 1, &p)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        r.towrite <- rr
+    }
+    // Start random triggers
+    p := ipbus.MakePacket(ipbus.Control)
+    timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    timingcsrctrl.MaskedWrite("rand_div", 15, &p)
+    timingcsrctrl.MaskedWrite("rand_int", 1, &p)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
+
+func (r *Reader) StopSelfTriggers() {
+    reply := make(chan data.ReqResp)
+    ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
+    for _, ch := range r.channels {
+        p := ipbus.MakePacket(ipbus.Control)
+        ctrl.MaskedWrite("chan_sel", ch, &p)
+        chanctrl.MaskedWrite("src_sel", 1, &p)
+        chanctrl.MaskedWrite("ro_en", 0, &p)
+        chanctrl.MaskedWrite("trig_en", 0, &p)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        r.towrite <- rr
+    }
+}
+
+func (r *Reader) SendSoftwareTriggers(n int) {
+    reply := make(chan data.ReqResp)
+    p := ipbus.MakePacket(ipbus.Control)
+    ctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    for i := 0; i < n; i++ {
+        ctrl.MaskedWrite("trig", 1, &p)
+    }
+    ctrl.MaskedWrite("trig", 0, &p)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
+
+func (r *Reader) StopRandomTriggers() {
+    reply := make(chan data.ReqResp)
+    // Start random triggers
+    p := ipbus.MakePacket(ipbus.Control)
+    timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    timingcsrctrl.MaskedWrite("rand_int", 0, &p)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+    for _, ch := range r.channels {
+        p := ipbus.MakePacket(ipbus.Control)
+        r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("chan_sel", ch, &p)
+        r.hw.Module.Registers["csr"].Words["chan_ctrl"].MaskedWrite("src_sel", 1, &p)
+        r.hw.Module.Registers["csr"].Words["chan_ctrl"].MaskedWrite("ro_en", 0, &p)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        r.towrite <- rr
+    }
+}
+
+func (r *Reader) StopTriggers() {
+    r.StopSelfTriggers()
+    r.StopRandomTriggers()
+}
+
 func (r *Reader) Run(errs chan data.ErrPack) {
-    defer data.Clean("Reader.Run()", errs)
+    defer data.Clean("Reader.ScopeModeRun()", errs)
+    r.read = make(chan data.ReqResp, 100)
+    running := true
+    bufferlen := uint32(0)
+    bufferdata := r.hw.Module.Registers["buffer"].Ports["data"]
+    buffersize := r.hw.Module.Registers["buffer"].Words["count"]
+    for running {
+        // Read up to X words of data then read size
+        p := ipbus.MakePacket(ipbus.Control)
+        if bufferlen > 0 {
+            toread := bufferlen
+            if toread >= 255 {
+                bufferdata.Read(255, &p)
+                toread -= 255
+            }
+            if toread >= 108 {
+                bufferdata.Read(108, &p)
+            } else {
+                bufferdata.Read(uint8(toread), &p)
+            }
+        }
+        buffersize.Read(&p)
+        r.hw.Send(p, r.read)
+        select {
+        // Signal to stop
+        case <- r.Stop:
+            running = false
+            break
+        // Get replies from the read request, send data to writer's channel and
+        // sleep for period based upon Number of words ready to read
+        case data := <-r.read:
+            lengths := buffersize.GetReads(data)
+            n := len(lengths)
+            if n > 0 {
+                bufferlen = lengths[n - 1][0]
+            }
+            //fmt.Printf("Received reply: %v\n", data)
+            r.towrite <- data
+        }
+    }
+}
+
+func (r *Reader) ScopeModeRun(errs chan data.ErrPack) {
+    defer data.Clean("Reader.ScopeModeRun()", errs)
     r.read = make(chan data.ReqResp, 100)
     running := true
     //nread := 0
@@ -436,7 +588,12 @@ func (c *Control) Start() data.ErrPack {
     fmt.Println("Setting up HW and readers.")
     for _, hw := range c.hws {
         go hw.Run()
-        r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond, c.channels)
+        // Currently fake trigger thresholds
+        thresholds := make(map[uint32]uint32)
+        for _, ch := range c.channels {
+            thresholds[ch] = uint32(8592)
+        }
+        r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond, c.channels, thresholds)
         c.readers = append(c.readers, r)
     }
 
@@ -538,8 +695,6 @@ func (c Control) stopacquisition() {
 
 // Start and stop a run
 func (c Control) Run(r data.Run) (bool, data.ErrPack) {
-    dt := r.End.Sub(time.Now())
-    tick := time.NewTicker(dt)
     // Tell the writer to start a new file
     c.runtowriter <- r
     // Start the readers going
@@ -548,17 +703,44 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     }
     // Tell the FPGAs to start acquisition
     c.startacquisition()
-    fmt.Printf("Run control waiting for %v.\n", dt)
+    for _, reader := range c.readers {
+        reader.StartRandomTriggers()
+    }
+    fmt.Printf("Running random triggers for %v.\n", r.RandomDuration)
+    tick := time.NewTicker(r.RandomDuration)
     err := data.MakeErrPack(error(nil))
     quit := false
     select {
     case <-tick.C:
         fmt.Printf("Run stopped due to ticker.\n")
+        for _, reader := range c.readers {
+            reader.StopRandomTriggers()
+        }
     case err = <-c.errs:
         fmt.Printf("Control.Run() found an error.\n")
+        quit = true
     case <-c.signals:
         fmt.Printf("Run stopped by ctrl-c.\n")
         quit = true
+    }
+    if !quit {
+        tick = time.NewTicker(r.TriggeredDuration)
+        fmt.Printf("Running self triggers for %v.\n", r.TriggeredDuration)
+        for _, reader := range c.readers {
+            reader.StartSelfTriggers()
+        }
+        select {
+        case <-tick.C:
+            fmt.Printf("Run stopped due to ticker.\n")
+            for _, reader := range c.readers {
+                reader.StopSelfTriggers()
+            }
+        case err = <-c.errs:
+            fmt.Printf("Control.Run() found an error.\n")
+        case <-c.signals:
+            fmt.Printf("Run stopped by ctrl-c.\n")
+            quit = true
+        }
     }
     // Stop the FPGAs
     // Really I should do this unless the error is something that would cause
