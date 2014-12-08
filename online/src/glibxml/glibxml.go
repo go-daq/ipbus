@@ -163,8 +163,17 @@ func newregister(node *xmlx.Node, modaddr uint32) (register, error) {
         }
         words[word.ID] = word
     }
+    ports := make(map[string]port)
+    portnodes := node.SelectNodes("", "port")
+    for _, p := range portnodes {
+        port, err := newport(p, uint32(address) + modaddr)
+        if err != nil {
+            return register{}, err
+        }
+        ports[port.ID] = port
+    }
     reg := register{id, uint32(address), uint32(address) + modaddr, descr,
-                    fwinfo, words}
+                    fwinfo, words, ports}
     return reg, nil
 }
 
@@ -174,7 +183,7 @@ type register struct {
     LAddress, GAddress uint32
     Description, FWInfo string
     Words map[string]word
-
+    Ports map[string]port
 }
 
 func (r register) String() string {
