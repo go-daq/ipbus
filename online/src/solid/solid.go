@@ -170,19 +170,19 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     bufferlen := uint32(0)
     bufferdata := r.hw.Module.Registers["buffer"].Ports["data"]
     buffersize := r.hw.Module.Registers["buffer"].Words["count"]
+    emptybufferdelay := 100 * time.Millisecond
     for running {
         // Read up to X words of data then read size
         p := ipbus.MakePacket(ipbus.Control)
         if bufferlen > 0 {
-            toread := bufferlen
-            if toread >= 255 {
+            if bufferlen >= 255 {
                 bufferdata.Read(255, &p)
-                toread -= 255
+                bufferlen -= 255
             }
-            if toread >= 108 {
+            if bufferlen >= 108 {
                 bufferdata.Read(108, &p)
             } else {
-                bufferdata.Read(uint8(toread), &p)
+                bufferdata.Read(uint8(bufferlen), &p)
             }
         }
         buffersize.Read(&p)
@@ -202,6 +202,9 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             }
             //fmt.Printf("Received reply: %v\n", data)
             r.towrite <- data
+            if bufferlen == 0 {
+                time.Sleep(emptybufferdelay)
+            }
         }
     }
 }

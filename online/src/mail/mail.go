@@ -35,7 +35,6 @@ func (e E) Send(subject, msg string) error {
         return fmt.Errorf("Sending email: password not loaded.")
     }
     auth := smtp.PlainAuth("", "solid.daq@gmail.com", e.pass, "smtp.gmail.com")
-    fmt.Printf("Auth: %v, sending...\n", auth)
     out := []byte(fmt.Sprintf("Subject: %s\n%s", subject, msg))
     err := smtp.SendMail("smtp.gmail.com:587", auth, "solid.daq@gmail.com", to, out)
     return err
