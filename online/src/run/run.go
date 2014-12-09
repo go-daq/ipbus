@@ -1,6 +1,7 @@
 package main
 
 import (
+    "crash"
     "data"
     "glibxml"
     "flag"
@@ -11,24 +12,6 @@ import (
     "runtime"
     "time"
 )
-
-func cleanexit(e mail.E) {
-    if r := recover(); r != nil {
-        if err, ok := r.(error); ok {
-            ep := data.MakeErrPack(err)
-            fmt.Printf("Caught a panic: %v\n", ep)
-            subject := fmt.Sprintf("Online DAQ crash at %v", time.Now())
-            msg := fmt.Sprintf("Caught a panic: %v\n", ep)
-            if err := e.Send(subject, msg); err != nil {
-                fmt.Println(err)
-            }
-        } else {
-            panic(r)
-        }
-    }
-    fmt.Println("Clean exit.")
-}
-
 
 func main() {
     dir := flag.String("dir", ".", "output directory")
@@ -71,12 +54,16 @@ func main() {
             channels = append(channels, ichan)
         }
     }
+    exit := crash.Exit{}
+    exit.Add(crash.Log{})
     e := mail.E{}
     err := e.Load(*passfile)
     if err != nil {
         panic(err)
     }
-    defer cleanexit(e)
+    exit.Add(e)
+    defer exit.CleanExit()
+    //defer cleanexit(e)
     modnames := strings.Split(*glibs, ",")
     mods := []glibxml.Module{}
     for _, modname := range modnames {
@@ -88,7 +75,7 @@ func main() {
     }
     runtime.GOMAXPROCS(4)
     fmt.Println("Solid's SM1 online DAQ software!")
-    control := solid.New(*dir, *store, channels)
+    control := solid.New(*dir, *store, channels, &exit)
     for _, mod := range mods {
         control.AddFPGA(mod)
     }

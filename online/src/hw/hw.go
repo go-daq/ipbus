@@ -19,6 +19,7 @@ package hw
        * Parse packet and transaction headers from received byte stream
 */
 import (
+    "crash"
 	"data"
 	"fmt"
     "glibxml"
@@ -29,12 +30,12 @@ import (
 
 var nhw = 0
 
-func NewHW(num int, mod glibxml.Module, dt time.Duration, errs chan data.ErrPack) *HW {
+func NewHW(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs chan data.ErrPack) *HW {
     raddr, err := net.ResolveUDPAddr("udp", mod.IP)
     if err != nil {
         panic(err)
     }
-	hw := HW{Num: num, raddr: raddr, timeout: dt, nextid: uint16(1), errs: errs,
+    hw := HW{Num: num, raddr: raddr, timeout: dt, nextid: uint16(1), exit: exit, errs: errs,
              Module: mod}
 	hw.init()
 	fmt.Printf("Created new HW: %v\n", hw)
@@ -53,6 +54,7 @@ type HW struct {
     recent []uint16 // Recent packet IDs
     outps chanmap
 	//outps      map[uint16]chan data.ReqResp // map of transaction
+    exit        *crash.Exit
 	errs       chan data.ErrPack    // Channel to send errors to whomever cares.
 	conn       *net.UDPConn     // UDP connection with the device.
 	raddr      *net.UDPAddr     // UDP address of the hardware device.
@@ -95,7 +97,7 @@ func (h *HW) config() error {
 
 // Get the device's status to set MTU and next ID.
 func (h *HW) ConfigDevice() {
-    defer data.Clean("HW.ConfigDevice()", h.errs)
+    defer h.exit.CleanExit()
 	status := ipbus.StatusPacket()
 	rc := make(chan data.ReqResp)
 	h.Send(status, rc)
@@ -115,7 +117,7 @@ func (h *HW) ConfigDevice() {
  * channel is closed.
  */
 func (h *HW) Run() {
-    defer data.Clean("HW.Run()", h.errs)
+    defer h.exit.CleanExit()
 	if !h.configured {
 		if err := h.config(); err != nil {
 			panic(err)
@@ -322,7 +324,7 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 }
 
 func (h HW) receive(rr data.ReqResp) {
-    defer data.Clean("HW.received", h.errs)
+    defer h.exit.CleanExit()
 	// Write data into buffer from UDP read, timestamp reply and set raddr
 	n, addr, err := h.conn.ReadFrom(rr.Bytes[rr.RespIndex:])
 	rr.Bytes = rr.Bytes[:rr.RespIndex+n]

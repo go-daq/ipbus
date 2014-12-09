@@ -205,6 +205,7 @@ func Clean(name string, errs chan ErrPack) {
             ep := MakeErrPack(err)
             fmt.Printf("Caught a panic: %s, %v\n", name, ep)
             errs <- ep
+            fmt.Printf("Sent error pack to %v at %p\n", errs, &errs)
         } else {
             panic(r)
         }

@@ -3,6 +3,7 @@ package solid
 import (
     "encoding/binary"
     "bytes"
+    "crash"
     "data"
     //"github.com/tarm/goserial"
     "path/filepath"
@@ -45,10 +46,11 @@ type Reader struct{
     period, dt time.Duration
     channels []uint32
     thresholds map[uint32]uint32
+    exit *crash.Exit
 }
 
-func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, channels []uint32, thresholds map[uint32]uint32) *Reader {
-    r := Reader{hw: hw, towrite: towrite, period: period, dt: dt, channels: channels, thresholds: thresholds}
+func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, channels []uint32, thresholds map[uint32]uint32, exit *crash.Exit) *Reader {
+    r := Reader{hw: hw, towrite: towrite, period: period, dt: dt, channels: channels, thresholds: thresholds, exit: exit}
     r.Stop = make(chan bool)
     return &r
 }
@@ -162,7 +164,7 @@ func (r *Reader) StopTriggers() {
 }
 
 func (r *Reader) Run(errs chan data.ErrPack) {
-    defer data.Clean("Reader.ScopeModeRun()", errs)
+    defer r.exit.CleanExit()
     r.read = make(chan data.ReqResp, 100)
     running := true
     bufferlen := uint32(0)
@@ -205,7 +207,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
 }
 
 func (r *Reader) ScopeModeRun(errs chan data.ErrPack) {
-    defer data.Clean("Reader.ScopeModeRun()", errs)
+    defer r.exit.CleanExit()
     r.read = make(chan data.ReqResp, 100)
     running := true
     //nread := 0
@@ -379,6 +381,7 @@ type Writer struct{
     towrite chan data.ReqResp
     fromcontrol chan data.Run
     Quit chan bool
+    exit *crash.Exit
 }
 
 func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
@@ -390,7 +393,7 @@ func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
 
 // Write incoming data to disk and clear first four bytes of written data
 func (w Writer) Run(errs chan data.ErrPack) {
-    defer data.Clean("Writer.Run()", errs)
+    defer w.exit.CleanExit()
     defer close(w.Quit)
     tickdt := 60 * time.Second
     tick := time.NewTicker(tickdt)
@@ -544,8 +547,8 @@ func (w *Writer) create(r data.Run) error {
     return err
 }
 
-func New(dir, store string, channels []uint32) Control {
-    c := Control{outpdir: dir, store: store, channels: channels}
+func New(dir, store string, channels []uint32, exit *crash.Exit) Control {
+    c := Control{outpdir: dir, store: store, channels: channels, exit: exit}
     c.config()
     c.errs = make(chan data.ErrPack, 100)
     c.signals = make(chan os.Signal)
@@ -564,6 +567,7 @@ type Control struct{
     sc SlowControl
     w *Writer
     started bool
+    exit *crash.Exit
     errs chan data.ErrPack
     signals chan os.Signal
     channels []uint32
@@ -593,7 +597,7 @@ func (c *Control) Start() data.ErrPack {
         for _, ch := range c.channels {
             thresholds[ch] = uint32(8592)
         }
-        r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond, c.channels, thresholds)
+        r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond, c.channels, thresholds, c.exit)
         c.readers = append(c.readers, r)
     }
 
@@ -615,7 +619,7 @@ func (c *Control) Start() data.ErrPack {
 }
 
 func (c *Control) AddFPGA(mod glibxml.Module) {
-    hw := hw.NewHW(len(c.hws), mod, time.Second, c.errs)
+    hw := hw.NewHW(len(c.hws), mod, time.Second, c.exit, c.errs)
     c.hws = append(c.hws, hw)
 }
 
