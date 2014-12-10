@@ -138,10 +138,10 @@ func MakeReadReply(data []byte) Transaction {
 
 func MakeReadNonInc(size uint8, addr uint32) Transaction {
 	body := make([]byte, 4)
-	body[0] = byte(addr & 0xf)
-	body[1] = byte((addr & 0xf0) >> 8)
-	body[2] = byte((addr & 0xf00) >> 16)
-	body[3] = byte((addr & 0xf000) >> 24)
+	body[3] = byte(addr & 0xff)
+	body[2] = byte((addr & 0xff00) >> 8)
+	body[1] = byte((addr & 0xff0000) >> 16)
+	body[0] = byte((addr & 0xff000000) >> 24)
 	return MakeTransaction(Version, 0, size, ReadNonInc, Request, body)
 }
 
@@ -174,9 +174,9 @@ func MakeWriteNonInc(addr uint32, data []byte) Transaction {
 func MakeRMWbits(addr uint32, and uint32, or uint32) Transaction {
 	body := make([]byte, 12)
 	for i := uint(0); i < 4; i++ {
-		body[i] = byte((addr & (0xff << (8 * i))) >> (8 * i))
-		body[i+4] = byte((and & (0xff << (8 * i))) >> (8 * i))
-		body[i+8] = byte((or & (0xff << (8 * i))) >> (8 * i))
+		body[i] = byte((addr & (0xff << (8 * (3 - i)))) >> (8 * (3 - i)))
+		body[i+4] = byte((and & (0xff << (8 * (3 - i)))) >> (8 * (3 - i)))
+		body[i+8] = byte((or & (0xff << (8 * (3 - i)))) >> (8 * (3 - i)))
 	}
 	return MakeTransaction(Version, 0, 1, RMWbits, Request, body)
 }
@@ -550,6 +550,7 @@ func (s *StatusResp) Parse(data []byte) error {
     if len(data) != 64 {
         return fmt.Errorf("Status report requires 60 bytes, received %d.", len(data))
     }
+    fmt.Printf("Parsing status: %x", data)
     head := &PackHeader{}
     head.Parse(data, 0, false)
     if head.ID != 0 || head.Type != Status {
@@ -569,9 +570,9 @@ func (s *StatusResp) Parse(data []byte) error {
     }
     loc += 4
     s.Next = 0
-    for i := 0; i < 4; i++ {
-        s.Next += uint32(data[loc + i]) << uint32((3 - i) * 8)
-    }
+    s.Next += uint32(data[loc + 1]) << 8
+    s.Next += uint32(data[loc + 2])
+    fmt.Printf("s.Next = 0x%d : %x%x\n", s.Next, data[loc + 1], data[loc + 2])
     loc += 4
     for i := 0; i < 16; i++ {
         s.IncomingHistory = append(s.IncomingHistory, NewHistory(uint8(data[loc + i])))

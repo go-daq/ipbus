@@ -21,6 +21,7 @@ package hw
 import (
 	"data"
 	"fmt"
+    "glibxml"
 	"ipbus"
 	"net"
 	"time"
@@ -28,8 +29,13 @@ import (
 
 var nhw = 0
 
-func NewHW(num int, raddr *net.UDPAddr, dt time.Duration, errs chan data.ErrPack) *HW {
-	hw := HW{Num: num, raddr: raddr, timeout: dt, nextid: uint16(1), errs: errs}
+func NewHW(num int, mod glibxml.Module, dt time.Duration, errs chan data.ErrPack) *HW {
+    raddr, err := net.ResolveUDPAddr("udp", mod.IP)
+    if err != nil {
+        panic(err)
+    }
+	hw := HW{Num: num, raddr: raddr, timeout: dt, nextid: uint16(1), errs: errs,
+             Module: mod}
 	hw.init()
 	fmt.Printf("Created new HW: %v\n", hw)
 	return &hw
@@ -60,6 +66,7 @@ type HW struct {
 	// sent. It is the HW interface's responsibility to
 	// ensure that sent requests and their replies will not
 	// overrun this bound. This is not currently implemented.
+    Module glibxml.Module // Addresses of registers, ports, etc.
 }
 
 func (h *HW) init() {
@@ -87,8 +94,8 @@ func (h *HW) config() error {
 }
 
 // Get the device's status to set MTU and next ID.
-func (h *HW) configdevice() {
-    defer data.Clean("HW.configdevice()", h.errs)
+func (h *HW) ConfigDevice() {
+    defer data.Clean("HW.ConfigDevice()", h.errs)
 	status := ipbus.StatusPacket()
 	rc := make(chan data.ReqResp)
 	h.Send(status, rc)
@@ -99,6 +106,7 @@ func (h *HW) configdevice() {
 	}
 	h.mtu = statusreply.MTU
 	h.nextid = uint16(statusreply.Next)
+    fmt.Printf("Configured device: MTU = %d, next ID = %d\n", h.mtu, h.nextid)
 }
 
 /*
@@ -112,7 +120,7 @@ func (h *HW) Run() {
 		if err := h.config(); err != nil {
 			panic(err)
 		}
-        go h.configdevice()
+        go h.ConfigDevice()
 	}
 	running := true
 	for running {
