@@ -415,8 +415,10 @@ func (w Writer) Run(errs chan data.ErrPack) {
                 writespeed := (nbytes - lastbytes) * 1e-6 / tickdt.Seconds()
                 fmt.Printf("Writing at %0.2f MB/s. Written %0.2f GB total. Buffer %d of %d.\n",
                            writespeed, nbytes * 1e-9, len(w.towrite), cap(w.towrite))
+                ipbusspeed := (nbytes - lastbytes) * 1e-6 / sumlatency.Seconds()
+                fmt.Printf("Average IPBus transport rate = %0.2f MB / s\n", ipbusspeed)
                 lastbytes = nbytes
-                fmt.Printf("Average latency = %f us, max = %v\n", averagelatency, 
+                fmt.Printf("Average latency = %0.2f us, max = %v\n", averagelatency, 
                            maxlatency)
                 maxlatency = time.Duration(0)
                 sumlatency = time.Duration(0)
@@ -502,6 +504,8 @@ func (w *Writer) end() error {
 }
 
 
+var headfootencodeversion = uint16(0x0)
+
 // Create the output file and write run header.
 func (w *Writer) create(r data.Run) error {
     layout := "02Jan2006_1504"
@@ -516,16 +520,17 @@ func (w *Writer) create(r data.Run) error {
     }
     w.open = true
     /* run header:
+        header/footer version [16 bits], ReqResp encoding version [16 bits]
         header size [32 bit words]
         online software commit - 160 bit sha1 hash
         run start time - 64 bit unit nanoseconds
         target run stop time - 64 bit unit nanoseconds
-        ???
-        ???
     */
-    size := uint32(9)
+    size := uint32(10)
     header := make([]byte, 0, size * 4)
     buf := new(bytes.Buffer)
+    err = binary.Write(buf, binary.BigEndian, headfootencodeversion)
+    err = binary.Write(buf, binary.BigEndian, data.ReqRespEncodeVersion)
     err = binary.Write(buf, binary.BigEndian, size)
     header = append(header, buf.Bytes()...)
     buf.Reset()

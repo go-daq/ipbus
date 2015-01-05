@@ -124,28 +124,25 @@ func (r *ReqResp) ClearReply() {
     }
 }
 
+var ReqRespEncodeVersion = uint16(0x0000)
+
 func (r ReqResp) Encode() ([]byte, error) {
     out := make([]byte, 0, len(r.Bytes) + 32)
     /* Write my header: 
-        remote IP - 32 bit
-        port (16 bit), length (16 bit) 
+        8 minor bits of IP, 0 bits 0x0, 16 bits length
         time sent - 64 bit
-        time received - 64 bit
+        latency [microsecond] - 32 bit
     */
-    host, port, err := net.SplitHostPort(r.RAddr.String())
+    host, _, err := net.SplitHostPort(r.RAddr.String())
     if err != nil {
         return []byte{}, err
     }
     ip := net.ParseIP(host)
     ipv4 := []byte(ip[12:])
-    out = append(out, ipv4...)
-    p, err := strconv.ParseUint(port, 10, 16)
-    if err != nil {
-        return []byte{}, err
-    }
-    out = append(out, uint8((p & 0xff00) >> 8))
-    out = append(out, uint8(p & 0x00ff))
-    words := uint16(len(r.Bytes) / 4) + 6
+    //out = append(out, ipv4...)
+    out = append(out, uint8(ipv4[3]))
+    out = append(out, uint8(0))
+    words := uint16(len(r.Bytes) / 4) + 4
     out = append(out, uint8((words & 0xff00) >> 8))
     out = append(out, uint8((words & 0x00ff)))
     sentnano := r.Sent.UnixNano()
@@ -154,11 +151,12 @@ func (r ReqResp) Encode() ([]byte, error) {
         mask := int64(0xff << shift)
         out = append(out, uint8((sentnano & mask) >> shift))
     }
-    recvnano := r.Received.UnixNano()
-    for i := 0; i < 8; i++ {
-        shift := uint((7 - i) * 8)
-        mask := int64(0xff << shift)
-        out = append(out, uint8((recvnano & mask) >> shift))
+    latency := r.Received.Sub(r.Sent).Seconds()
+    latencyus := uint32(latency * 1e6)
+    for i := 0; i < 4; i++ {
+        shift := uint((3 - i) * 8)
+        mask := uint32(0xff << shift)
+        out = append(out, uint8((latencyus & mask) >> shift))
     }
     out = append(out, r.Bytes...)
     return out, error(nil)
