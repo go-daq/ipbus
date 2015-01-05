@@ -56,11 +56,22 @@ func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, c
 }
 
 func (r *Reader) TriggerWindow(length, offset uint32) {
+    fmt.Printf("Setting trigger window length = %d, offset = %d.\n", length, offset)
     reply := make(chan data.ReqResp)
-    reg := r.hw.Module.Registers["csr"].Words["window_ctrl"]
+    ctrlreg := r.hw.Module.Registers["csr"].Words["ctrl"]
+    timereg := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    winreg := r.hw.Module.Registers["csr"].Words["window_ctrl"]
     p := ipbus.MakePacket(ipbus.Control)
-    reg.MaskedWrite("lag", offset, &p)
-    reg.MaskedWrite("size", length, &p)
+    ctrlreg.MaskedWrite("idelctrl_rst", 1, &p)
+    ctrlreg.MaskedWrite("idelctrl_rst", 1, &p)
+    ctrlreg.MaskedWrite("idelctrl_rst", 0, &p)
+    timereg.MaskedWrite("rst", 1, &p)
+    timereg.MaskedWrite("rst", 0, &p)
+    winreg.MaskedWrite("lag", offset, &p)
+    winreg.MaskedWrite("size", length, &p)
+    winreg.Read(&p)
+    timereg.MaskedWrite("ctr_rst", 1, &p)
+    timereg.MaskedWrite("ctr_rst", 0, &p)
     r.hw.Send(p, reply)
     rr := <-reply
     r.towrite <- rr
@@ -90,18 +101,22 @@ func (r *Reader) StartRandomTriggers() {
     chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
 
     // Enable readout for random triggers
-    for _, ch := range r.channels {
+    for i, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
-        ctrl.MaskedWrite("chan_sel", ch, &p)
+        ctrl.MaskedWrite("chan_sel", uint32(i), &p)
         chanctrl.MaskedWrite("src_sel", 1, &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
+        fmt.Printf("Enabling random triggers on channel %d: %d.\n", i, ch)
         r.hw.Send(p, reply)
         rr := <-reply
         r.towrite <- rr
     }
     // Start random triggers
     p := ipbus.MakePacket(ipbus.Control)
+    fmt.Printf("Starting random triggers.\n")
     timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    stat := r.hw.Module.Registers["csr"].Words["stat"]
+    stat.Read(&p)
     timingcsrctrl.MaskedWrite("rand_div", 15, &p)
     timingcsrctrl.MaskedWrite("rand_int", 1, &p)
     r.hw.Send(p, reply)
@@ -140,16 +155,20 @@ func (r *Reader) SendSoftwareTriggers(n int) {
 
 func (r *Reader) StopRandomTriggers() {
     reply := make(chan data.ReqResp)
-    // Start random triggers
+    // Stop random triggers
     p := ipbus.MakePacket(ipbus.Control)
+    fmt.Printf("Stopping random triggers.\n")
     timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
     timingcsrctrl.MaskedWrite("rand_int", 0, &p)
+    stat := r.hw.Module.Registers["csr"].Words["stat"]
+    stat.Read(&p)
     r.hw.Send(p, reply)
     rr := <-reply
     r.towrite <- rr
-    for _, ch := range r.channels {
+    for i, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
-        r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("chan_sel", ch, &p)
+        fmt.Printf("Disabling random triggers for channel %d: %d\n", i, ch)
+        r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("chan_sel", uint32(i), &p)
         r.hw.Module.Registers["csr"].Words["chan_ctrl"].MaskedWrite("src_sel", 1, &p)
         r.hw.Module.Registers["csr"].Words["chan_ctrl"].MaskedWrite("ro_en", 0, &p)
         r.hw.Send(p, reply)
@@ -719,6 +738,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     // Tell the FPGAs to start acquisition
     c.startacquisition()
     for _, reader := range c.readers {
+        reader.TriggerWindow(0xff, 0x7f)
         reader.StartRandomTriggers()
     }
     fmt.Printf("Running random triggers for %v.\n", r.RandomDuration)
