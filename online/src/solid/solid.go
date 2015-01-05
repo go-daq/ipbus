@@ -164,7 +164,7 @@ func (r *Reader) StopTriggers() {
 }
 
 func (r *Reader) Run(errs chan data.ErrPack) {
-    defer r.exit.CleanExit()
+    defer r.exit.CleanExit("Reader.Run()")
     r.read = make(chan data.ReqResp, 100)
     running := true
     bufferlen := uint32(0)
@@ -210,7 +210,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
 }
 
 func (r *Reader) ScopeModeRun(errs chan data.ErrPack) {
-    defer r.exit.CleanExit()
+    defer r.exit.CleanExit("Reader.ScopeModeRun()")
     r.read = make(chan data.ReqResp, 100)
     running := true
     //nread := 0
@@ -396,7 +396,7 @@ func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
 
 // Write incoming data to disk and clear first four bytes of written data
 func (w Writer) Run(errs chan data.ErrPack) {
-    defer w.exit.CleanExit()
+    defer w.exit.CleanExit("Writer.Run()")
     defer close(w.Quit)
     tickdt := 60 * time.Second
     tick := time.NewTicker(tickdt)
@@ -596,9 +596,11 @@ func (c *Control) Start() data.ErrPack {
     for _, hw := range c.hws {
         go hw.Run()
         // Currently fake trigger thresholds
+        fakethreshold := uint32(8592)
+        fmt.Printf("Using arbitrary trigger of %d.\n", fakethreshold)
         thresholds := make(map[uint32]uint32)
         for _, ch := range c.channels {
-            thresholds[ch] = uint32(8592)
+            thresholds[ch] = fakethreshold
         }
         r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond, c.channels, thresholds, c.exit)
         c.readers = append(c.readers, r)
@@ -703,6 +705,7 @@ func (c Control) stopacquisition() {
 // Start and stop a run
 func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     // Tell the writer to start a new file
+    fmt.Printf("Starting run for %v with random triggers and %v with self triggers.\n", r.RandomDuration, r.TriggeredDuration)
     c.runtowriter <- r
     // Start the readers going
     for _, reader := range c.readers {
