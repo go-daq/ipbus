@@ -56,11 +56,22 @@ func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, c
 }
 
 func (r *Reader) TriggerWindow(length, offset uint32) {
+    fmt.Printf("Setting trigger window length = %d, offset = %d.\n", length, offset)
     reply := make(chan data.ReqResp)
-    reg := r.hw.Module.Registers["csr"].Words["window_ctrl"]
+    ctrlreg := r.hw.Module.Registers["csr"].Words["ctrl"]
+    timereg := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    winreg := r.hw.Module.Registers["csr"].Words["window_ctrl"]
     p := ipbus.MakePacket(ipbus.Control)
-    reg.MaskedWrite("lag", offset, &p)
-    reg.MaskedWrite("size", length, &p)
+    ctrlreg.MaskedWrite("idelctrl_rst", 1, &p)
+    ctrlreg.MaskedWrite("idelctrl_rst", 1, &p)
+    ctrlreg.MaskedWrite("idelctrl_rst", 0, &p)
+    timereg.MaskedWrite("rst", 1, &p)
+    timereg.MaskedWrite("rst", 0, &p)
+    winreg.MaskedWrite("lag", offset, &p)
+    winreg.MaskedWrite("size", length, &p)
+    winreg.Read(&p)
+    timereg.MaskedWrite("ctr_rst", 1, &p)
+    timereg.MaskedWrite("ctr_rst", 0, &p)
     r.hw.Send(p, reply)
     rr := <-reply
     r.towrite <- rr
@@ -90,18 +101,22 @@ func (r *Reader) StartRandomTriggers() {
     chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
 
     // Enable readout for random triggers
-    for _, ch := range r.channels {
+    for i, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
-        ctrl.MaskedWrite("chan_sel", ch, &p)
+        ctrl.MaskedWrite("chan_sel", uint32(i), &p)
         chanctrl.MaskedWrite("src_sel", 1, &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
+        fmt.Printf("Enabling random triggers on channel %d: %d.\n", i, ch)
         r.hw.Send(p, reply)
         rr := <-reply
         r.towrite <- rr
     }
     // Start random triggers
     p := ipbus.MakePacket(ipbus.Control)
+    fmt.Printf("Starting random triggers.\n")
     timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    stat := r.hw.Module.Registers["csr"].Words["stat"]
+    stat.Read(&p)
     timingcsrctrl.MaskedWrite("rand_div", 15, &p)
     timingcsrctrl.MaskedWrite("rand_int", 1, &p)
     r.hw.Send(p, reply)
@@ -140,16 +155,20 @@ func (r *Reader) SendSoftwareTriggers(n int) {
 
 func (r *Reader) StopRandomTriggers() {
     reply := make(chan data.ReqResp)
-    // Start random triggers
+    // Stop random triggers
     p := ipbus.MakePacket(ipbus.Control)
+    fmt.Printf("Stopping random triggers.\n")
     timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
     timingcsrctrl.MaskedWrite("rand_int", 0, &p)
+    stat := r.hw.Module.Registers["csr"].Words["stat"]
+    stat.Read(&p)
     r.hw.Send(p, reply)
     rr := <-reply
     r.towrite <- rr
-    for _, ch := range r.channels {
+    for i, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
-        r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("chan_sel", ch, &p)
+        fmt.Printf("Disabling random triggers for channel %d: %d\n", i, ch)
+        r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("chan_sel", uint32(i), &p)
         r.hw.Module.Registers["csr"].Words["chan_ctrl"].MaskedWrite("src_sel", 1, &p)
         r.hw.Module.Registers["csr"].Words["chan_ctrl"].MaskedWrite("ro_en", 0, &p)
         r.hw.Send(p, reply)
@@ -164,7 +183,7 @@ func (r *Reader) StopTriggers() {
 }
 
 func (r *Reader) Run(errs chan data.ErrPack) {
-    defer r.exit.CleanExit()
+    defer r.exit.CleanExit("Reader.Run()")
     r.read = make(chan data.ReqResp, 100)
     running := true
     bufferlen := uint32(0)
@@ -210,7 +229,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
 }
 
 func (r *Reader) ScopeModeRun(errs chan data.ErrPack) {
-    defer r.exit.CleanExit()
+    defer r.exit.CleanExit("Reader.ScopeModeRun()")
     r.read = make(chan data.ReqResp, 100)
     running := true
     //nread := 0
@@ -396,7 +415,7 @@ func NewWriter(towrite chan data.ReqResp, fromcontrol chan data.Run,
 
 // Write incoming data to disk and clear first four bytes of written data
 func (w Writer) Run(errs chan data.ErrPack) {
-    defer w.exit.CleanExit()
+    defer w.exit.CleanExit("Writer.Run()")
     defer close(w.Quit)
     tickdt := 60 * time.Second
     tick := time.NewTicker(tickdt)
@@ -415,8 +434,10 @@ func (w Writer) Run(errs chan data.ErrPack) {
                 writespeed := (nbytes - lastbytes) * 1e-6 / tickdt.Seconds()
                 fmt.Printf("Writing at %0.2f MB/s. Written %0.2f GB total. Buffer %d of %d.\n",
                            writespeed, nbytes * 1e-9, len(w.towrite), cap(w.towrite))
+                ipbusspeed := (nbytes - lastbytes) * 1e-6 / sumlatency.Seconds()
+                fmt.Printf("Average IPBus transport rate = %0.2f MB / s\n", ipbusspeed)
                 lastbytes = nbytes
-                fmt.Printf("Average latency = %f us, max = %v\n", averagelatency, 
+                fmt.Printf("Average latency = %0.2f us, max = %v\n", averagelatency, 
                            maxlatency)
                 maxlatency = time.Duration(0)
                 sumlatency = time.Duration(0)
@@ -502,6 +523,8 @@ func (w *Writer) end() error {
 }
 
 
+var headfootencodeversion = uint16(0x0)
+
 // Create the output file and write run header.
 func (w *Writer) create(r data.Run) error {
     layout := "02Jan2006_1504"
@@ -516,16 +539,17 @@ func (w *Writer) create(r data.Run) error {
     }
     w.open = true
     /* run header:
+        header/footer version [16 bits], ReqResp encoding version [16 bits]
         header size [32 bit words]
         online software commit - 160 bit sha1 hash
         run start time - 64 bit unit nanoseconds
         target run stop time - 64 bit unit nanoseconds
-        ???
-        ???
     */
-    size := uint32(9)
+    size := uint32(10)
     header := make([]byte, 0, size * 4)
     buf := new(bytes.Buffer)
+    err = binary.Write(buf, binary.BigEndian, headfootencodeversion)
+    err = binary.Write(buf, binary.BigEndian, data.ReqRespEncodeVersion)
     err = binary.Write(buf, binary.BigEndian, size)
     header = append(header, buf.Bytes()...)
     buf.Reset()
@@ -596,9 +620,11 @@ func (c *Control) Start() data.ErrPack {
     for _, hw := range c.hws {
         go hw.Run()
         // Currently fake trigger thresholds
+        fakethreshold := uint32(8592)
+        fmt.Printf("Using arbitrary trigger of %d.\n", fakethreshold)
         thresholds := make(map[uint32]uint32)
         for _, ch := range c.channels {
-            thresholds[ch] = uint32(8592)
+            thresholds[ch] = fakethreshold
         }
         r := NewReader(hw, c.datatowriter, time.Second, time.Microsecond, c.channels, thresholds, c.exit)
         c.readers = append(c.readers, r)
@@ -703,6 +729,7 @@ func (c Control) stopacquisition() {
 // Start and stop a run
 func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     // Tell the writer to start a new file
+    fmt.Printf("Starting run for %v with random triggers and %v with self triggers.\n", r.RandomDuration, r.TriggeredDuration)
     c.runtowriter <- r
     // Start the readers going
     for _, reader := range c.readers {
@@ -711,6 +738,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     // Tell the FPGAs to start acquisition
     c.startacquisition()
     for _, reader := range c.readers {
+        reader.TriggerWindow(0xff, 0x7f)
         reader.StartRandomTriggers()
     }
     fmt.Printf("Running random triggers for %v.\n", r.RandomDuration)

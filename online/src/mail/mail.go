@@ -47,8 +47,8 @@ func (e E) Log(msg string, errp data.ErrPack) error {
     return err
 }
 
-func (e E) Handle(ep data.ErrPack) {
+func (e E) Handle(ep data.ErrPack, msg string) {
     subject := fmt.Sprintf("Online DAQ crash at %v", time.Now())
-    msg := fmt.Sprintf("Caught a panic: %v\n", ep)
-    e.Send(subject, msg)
+    emsg := fmt.Sprintf("Caught a panic: %s, %v\n", msg, ep)
+    e.Send(subject, emsg)
 }

@@ -62,7 +62,7 @@ func main() {
         panic(err)
     }
     exit.Add(e)
-    defer exit.CleanExit()
+    defer exit.CleanExit("main()")
     //defer cleanexit(e)
     modnames := strings.Split(*glibs, ",")
     mods := []glibxml.Module{}
@@ -91,7 +91,7 @@ func main() {
     dttriggered := time.Duration(*triggeredperiod) * time.Second
     for *nruns < 0 || irun < *nruns {
         fmt.Printf("Making %dth run.\n", irun)
-        r, err := data.NewRun(uint32(irun), "test", dtrandom, dttriggered)
+        r, err := data.NewRun(uint32(irun), "triggeredtest", dtrandom, dttriggered)
         if err != nil {
             panic(err)
         }
