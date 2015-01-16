@@ -26,7 +26,7 @@
             <mask id="size" mask="0x3ff0000"/>
         </word>
         <word id="chan_ctrl" address="0x2">
-            <nodstare id="sync_en" mask="0x1"/>
+            <mask id="sync_en" mask="0x1"/>
             <mask id="phase" mask="0x2"/>
             <mask id="src_sel" mask="0x4"/>
             <mask id="invert" mask="0x8"/>

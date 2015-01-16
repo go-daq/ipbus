@@ -115,7 +115,7 @@ type ReqResp struct{
 }
 
 func (r ReqResp) String() string {
-    return fmt.Sprintf("out = %v, in = %v, %x, %v, %v, %v, %d, %d", r.Out, r.In, r.Bytes, r.Sent, r.Received, r.RAddr, r.RespIndex, r.RespSize)
+    return fmt.Sprintf("out = %v, in = %v, %x, %v, %v, %v, %d, %d", r.Out, r.In, r.Bytes[r.RespIndex + r.RespSize], r.Sent, r.Received, r.RAddr, r.RespIndex, r.RespSize)
 }
 
 func (r *ReqResp) ClearReply() {
