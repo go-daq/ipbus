@@ -30,7 +30,7 @@ import (
 
 var nhw = 0
 
-func NewHW(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs chan data.ErrPack) *HW {
+func New(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs chan data.ErrPack) *HW {
 	raddr, err := net.ResolveUDPAddr("udp", mod.IP)
 	if err != nil {
 		panic(err)
@@ -125,6 +125,7 @@ func (h *HW) Run() {
 		go h.ConfigDevice()
 	}
 	running := true
+    lastreceived := uint16(0)
 	ntimeout := 0
 	for running {
 		//fmt.Printf("HW %v: expecting info from chan at %p\n", h, &h.tosend)
@@ -152,6 +153,7 @@ func (h *HW) Run() {
 					fmt.Printf("HW%d: Received a Status reply.\n", h.Num)
 					if timedout {
 						fmt.Printf("HW%d: Expected a status reply because %v was lost.\n", h.Num, lost)
+                        fmt.Printf("HW%d: last received ID = %d = 0x%08x.\n", h.Num, lastreceived, lastreceived)
 						forwardreply = false
 						// Check whether the lost packet was received. If it
 						// was then request the reply again. Otherwise send
@@ -217,6 +219,7 @@ func (h *HW) Run() {
 				if forwardreply {
 					// Send reply to the correct channel
 					id := reply.Out.ID
+                    lastreceived = id
 					//fmt.Printf("Sending reply to originator: %d of %v\n", id, h.outps)
 					req := getchan(id)
 					h.outps.read <- req

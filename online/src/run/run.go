@@ -15,6 +15,7 @@ import (
 
 func main() {
     dir := flag.String("dir", ".", "output directory")
+    name := flag.String("name", "testing", "part of output filename")
     randomperiod := flag.Int("randomtime", 30, "Length of run [s]")
     triggeredperiod := flag.Int("triggertime", 870, "Length of run [s]")
     nchans := flag.Int("nchans", 38, "Number of channels per GLIB.")
@@ -73,9 +74,10 @@ func main() {
         }
         mods = append(mods, mod)
     }
-    runtime.GOMAXPROCS(4)
+    runtime.GOMAXPROCS(6)
     fmt.Println("Solid's SM1 online DAQ software!")
-    control := solid.New(*dir, *store, channels, &exit)
+    internaltrigger := true
+    control := solid.New(*dir, *store, channels, &exit, internaltrigger)
     for _, mod := range mods {
         control.AddFPGA(mod)
     }
@@ -91,7 +93,8 @@ func main() {
     dttriggered := time.Duration(*triggeredperiod) * time.Second
     for *nruns < 0 || irun < *nruns {
         fmt.Printf("Making %dth run.\n", irun)
-        r, err := data.NewRun(uint32(irun), "triggeredtest", dtrandom, dttriggered)
+        fn := "triggered_" + *name
+        r, err := data.NewRun(uint32(irun), fn, dtrandom, dttriggered)
         if err != nil {
             panic(err)
         }

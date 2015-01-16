@@ -356,7 +356,7 @@ func (p *PackHeader) Parse(data []byte, loc int, parsetransactions bool) error {
             reverse = true
             fmt.Printf("Header has reverse byte ordering.\n")
         } else {
-            return fmt.Errorf("Invalid byte order in: %x = %x", data[loc:], data[loc + 3])
+            return fmt.Errorf("Invalid byte order in: %x = 0x%08x", data[loc:], data[loc + 3])
         }
 	}
 	p.Type = PacketType(data[loc + 3] & 0x0f)
@@ -550,7 +550,7 @@ func (s *StatusResp) Parse(data []byte) error {
     if len(data) != 64 {
         return fmt.Errorf("Status report requires 60 bytes, received %d.", len(data))
     }
-    fmt.Printf("Parsing status: %x", data)
+    fmt.Printf("Parsing status: %x\n", data)
     head := &PackHeader{}
     head.Parse(data, 0, false)
     if head.ID != 0 || head.Type != Status {
@@ -580,6 +580,9 @@ func (s *StatusResp) Parse(data []byte) error {
     loc += 16
     for i := 0; i < 4; i++ {
         p := &PackHeader{}
+        if data[loc] == 0 {
+            continue
+        }
         if err := p.Parse(data, loc, false); err != nil {
             return err
         }
@@ -588,6 +591,9 @@ func (s *StatusResp) Parse(data []byte) error {
         loc += 4
     }
     for i := 0; i < 4; i++ {
+        if data[loc] == 0 {
+            continue
+        }
         p := &PackHeader{}
         if err := p.Parse(data, loc, false); err != nil {
             return err
