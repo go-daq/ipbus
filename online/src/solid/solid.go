@@ -872,7 +872,7 @@ func (c *Control) Start() data.ErrPack {
     for _, hw := range c.hws {
         go hw.Run()
         // Currently fake trigger thresholds
-        fakethreshold := uint32(15000)
+        fakethreshold := uint32(12000)
         fmt.Printf("Using arbitrary trigger of %d.\n", fakethreshold)
         thresholds := make(map[uint32]uint32)
         for _, ch := range c.channels {
@@ -1041,7 +1041,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
                     reader.RandomTriggerRate(0.1)
             }
         } else {
-            c.clock.RandomRate(0.1)
+            c.clock.RandomRate(0.01)
         }
     case err = <-c.errs:
         fmt.Printf("Control.Run() found an error.\n")
@@ -1053,11 +1053,9 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     if !quit {
         fmt.Printf("Running self triggers for %v.\n", r.TriggeredDuration)
         tick = time.NewTicker(r.TriggeredDuration)
-/*
         for _, reader := range c.readers {
             reader.StartSelfTriggers()
         }
-*/
         select {
         case <-tick.C:
             fmt.Printf("Run stopped due to ticker.\n")
