@@ -49,16 +49,33 @@ func NewClockBoard(hw *hw.HW, towrite chan data.ReqResp) *ClockBoard {
 }
 
 func (clk *ClockBoard) Reset() {
+    fmt.Printf("Clock board resetting\n")
     magic := clk.hw.Module.Registers["id"].Words["magic"]
     info := clk.hw.Module.Registers["id"].Words["info"]
     synccsrctrl := clk.hw.Module.Registers["sync_csr"].Words["ctrl"]
+    stat := clk.hw.Module.Registers["csr"].Words["stat"]
     p := ipbus.MakePacket(ipbus.Control)
     synccsrctrl.MaskedWrite("rst", 1, &p)
     magic.Read(&p)
     info.Read(&p)
+    stat.Read(&p)
     reply := make(chan data.ReqResp)
     clk.hw.Send(p, reply)
     rr := <-reply
+    magics := magic.GetReads(rr)
+    infos := info.GetReads(rr)
+    if len(magics) > 0 && len(infos) > 0 {
+        fmt.Printf("Clock is alive: magic = 0x%08x, info = 0x%08x\n", magics[0], infos[0])
+
+    } else {
+        fmt.Printf("Clock reset didn't get id.magic [%d] or id.read [%d] vaues.\n", len(magics), len(infos))
+    }
+    stats := stat.GetReads(rr)
+    if len(stats) > 0 {
+        lock := stat.GetMaskedReads("clk_lock", rr)[0]
+        stop := stat.GetMaskedReads("clk_stop", rr)[0]
+        fmt.Printf("Clock csr.stat = 0%08x, clk_lock = %d, clk_stop = %d, \n", stats[0], lock, stop)
+    }
     clk.towrite <- rr
 }
 
@@ -70,9 +87,12 @@ func (clk *ClockBoard) RandomRate(rate float64) {
     p := ipbus.MakePacket(ipbus.Control)
     timingcsrctrl.MaskedWrite("rand_div", rdiv, &p)
     reply := make(chan data.ReqResp)
+    fmt.Printf("Clock sending rate setting packet.\n")
     clk.hw.Send(p, reply)
     rr := <-reply
+    fmt.Printf("Clock sending packet to reader.\n")
     clk.towrite <- rr
+    fmt.Printf("Clock finished RandomRate()\n")
 }
 
 func (clk *ClockBoard) StartTriggers() {
@@ -153,21 +173,29 @@ func (r *Reader) EnableReadoutChannels() {
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
+    stat := r.hw.Module.Registers["csr"].Words["stat"]
     for _, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
-        chanctrl.MaskedWrite("src_sel", 0, &p)
+        fmt.Printf("Selecting channel %d\n", ch)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("src_sel", 1, &p)
+        ctrl.Read(&p)
+        stat.Read(&p)
+        chanctrl.Read(&p)
+        fmt.Printf("Enabling readout.\n")
         chanctrl.MaskedWrite("ro_en", 1, &p)
-        //chanctrl.MaskedWrite("trig_en", 1, &p)
+        stat.Read(&p)
         r.hw.Send(p, reply)
         rr := <-reply
+        ctrls := stat.GetReads(rr)
+        if len(ctrls) > 0 {
+            fmt.Printf("csr.stat = %x\n", ctrls)
+        }
         r.towrite <- rr
     }
     for _, ch := range r.triggerchannels {
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("src_sel", 1, &p)
+        //chanctrl.MaskedWrite("src_sel", 1, &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
         r.hw.Send(p, reply)
         rr := <-reply
@@ -183,7 +211,7 @@ func (r *Reader) StartSelfTriggers() {
     for _, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("src_sel", 1, &p)
+        //chanctrl.MaskedWrite("src_sel", 1, &p)
         threshold.Write(r.thresholds[ch], &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
         chanctrl.MaskedWrite("trig_en", 1, &p)
@@ -200,7 +228,7 @@ func (r *Reader) StopSelfTriggers() {
     for _, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("src_sel", 1, &p)
+        //chanctrl.MaskedWrite("src_sel", 1, &p)
         chanctrl.MaskedWrite("ro_en", 0, &p)
         chanctrl.MaskedWrite("trig_en", 0, &p)
         r.hw.Send(p, reply)
@@ -293,11 +321,13 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                 bufferdata.Read(255, &p)
                 bufferlen -= 255
             }
+            /*
             if bufferlen >= 108 {
                 bufferdata.Read(108, &p)
             } else {
                 bufferdata.Read(uint8(bufferlen), &p)
             }
+            */
         }
         if nempty % 100 == 0 {
             stat.Read(&p)
@@ -354,7 +384,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             } else {
                 ndata += 1
                 if ndata == 1 {
-                    fmt.Printf("1st with data after %d empty.\n", nempty)
+                    fmt.Printf("1st with data [%d] after %d empty.\n", bufferlen, nempty)
                 }
                 nempty = 0
                 //fmt.Printf("lengths = %v\n", lengths)
@@ -454,29 +484,78 @@ func (r *Reader) ScopeModeRun(errs chan data.ErrPack) {
 
 func (r Reader) Reset() {
     fmt.Printf("HW%d: doing reset.\n", r.hw.Num)
-    pack := ipbus.MakePacket(ipbus.Control)
-    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("soft_rst", 1, &pack)
-    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("soft_rst", 0, &pack)
-    r.hw.Module.Registers["id"].Words["magic"].Read(&pack)
-    r.hw.Module.Registers["id"].Words["info"].Read(&pack)
+    csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    csrstat := r.hw.Module.Registers["csr"].Words["stat"]
+    idmagic := r.hw.Module.Registers["id"].Words["magic"]
+    idinfo := r.hw.Module.Registers["id"].Words["info"]
     timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
-    timingcsrctrl.MaskedWrite("rst", 1, &pack)
-    timingcsrctrl.MaskedWrite("rst", 0, &pack)
-    timingcsrctrl.MaskedWrite("buf_rst", 1, &pack)
-    timingcsrctrl.MaskedWrite("buf_rst", 0, &pack)
+    fmt.Printf("Doing software reset.\n")
+    p := ipbus.MakePacket(ipbus.Control)
+    csrctrl.MaskedWrite("soft_rst", 1, &p)
     reply := make(chan data.ReqResp)
-    r.hw.Send(pack, reply)
+    r.hw.Send(p, reply)
     rr := <-reply
-    magicids := r.hw.Module.Registers["id"].Words["magic"].GetReads(rr)
+    r.towrite <- rr
+    time.Sleep(time.Second)
+
+    pack := ipbus.MakePacket(ipbus.Control)
+    csrctrl.MaskedWrite("idelctrl_rst", 1, &pack)
+    csrctrl.MaskedWrite("idelctrl_rst", 1, &pack)
+    csrctrl.MaskedWrite("idelctrl_rst", 0, &pack)
+    //csrctrl.MaskedWrite("mmcm_rst", 1, &pack)
+    csrctrl.MaskedWrite("clk_sel", 1, &pack)
+    //csrctrl.MaskedWrite("mmcm_rst", 0, &pack)
+    fmt.Printf("Reading id.magic and id.info\n")
+    idmagic.Read(&pack)
+    idinfo.Read(&pack)
+    fmt.Printf("Doing timing.csr.ctrl reset, disabling sync.\n")
+    timingcsrctrl.MaskedWrite("ctr_rst", 1, &pack)
+    timingcsrctrl.MaskedWrite("ctr_rst", 0, &pack)
+    //timingcsrctrl.MaskedWrite("sync_en", 0, &pack)
+    //timingcsrctrl.MaskedWrite("buf_rst", 1, &pack)
+    fmt.Printf("Reading csr.stat\n")
+    csrstat.Read(&pack)
+    r.hw.Send(pack, reply)
+    rr = <-reply
+    magicids := idmagic.GetReads(rr)
     if len(magicids) > 0 {
         fmt.Printf("Board is alive: magic ID = 0x%x\n", magicids[0])
     }
-    infos := r.hw.Module.Registers["id"].Words["info"].GetReads(rr)
+    infos := idinfo.GetReads(rr)
     if len(infos) > 0 {
         fmt.Printf("info: 0x%x\n", infos[0])
     }
+    stats := csrstat.GetReads(rr)
+    if len(stats) > 0 {
+        fmt.Printf("csr.stat: 0x%08x\n", stats[0])
+        fmt.Printf("csr.stat.clk_lock = %d\n", csrstat.GetMaskedReads("clk_lock", rr)[0])
+        fmt.Printf("csr.stat.ro_stop = %d\n", csrstat.GetMaskedReads("ro_stop", rr)[0])
+    }
     r.towrite <- rr
-    r.hw.ConfigDevice()
+    //r.hw.ConfigDevice()
+}
+
+func (r Reader) Stat() {
+    fmt.Printf("Getting HW%d csr.stat\n", r.hw.Num)
+    csrstat := r.hw.Module.Registers["csr"].Words["stat"]
+    trigstat := r.hw.Module.Registers["trig"].Words["stat"]
+    pack := ipbus.MakePacket(ipbus.Control)
+    csrstat.Read(&pack)
+    trigstat.Read(&pack)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(pack, reply)
+    rr := <-reply
+    stats := csrstat.GetReads(rr)
+    if len(stats) > 0 {
+        fmt.Printf("csr.stat: 0x%08x\n", stats[0])
+        fmt.Printf("csr.stat.clk_lock = %d\n", csrstat.GetMaskedReads("clk_lock", rr)[0])
+        fmt.Printf("csr.stat.ro_stop = %d\n", csrstat.GetMaskedReads("ro_stop", rr)[0])
+    }
+    stats = trigstat.GetReads(rr)
+    if len(stats) > 0 {
+        fmt.Printf("trig.stat: 0x%08x\n", stats[0])
+    }
+    r.towrite <- rr
 }
 
 func (r Reader) SwapClocks() {
@@ -484,7 +563,7 @@ func (r Reader) SwapClocks() {
     pack := ipbus.MakePacket(ipbus.Control)
     r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 1, &pack)
     r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("clk_sel", 1, &pack)
-    //r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 0, &pack)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 0, &pack)
     reply := make(chan data.ReqResp)
     r.hw.Send(pack, reply)
     rr := <-reply
@@ -519,11 +598,11 @@ func (r Reader) Align() {
     increg := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
     for ch := uint32(0); ch < 38; ch++ {
         r.hw.Module.Registers["csr"].Words["ctrl"].Write(ch, &pack)
-        chctrl.MaskedWrite("invert", ch_inv[ch], &pack)
         chctrl.MaskedWrite("sync_en", 1, &pack)
+        chctrl.MaskedWrite("invert", ch_inv[ch], &pack)
         chctrl.MaskedWrite("phase", 1, &pack)
         chctrl.MaskedWrite("shift", shifts[ch], &pack)
-        chctrl.MaskedWrite("src_sel", 0, &pack)
+        //chctrl.MaskedWrite("src_sel", 0, &pack)
         for i := uint32(0); i < incs[ch]; i++ {
             increg.MaskedWrite("inc", 1, &pack)
             increg.MaskedWrite("inc", 0, &pack)
@@ -769,7 +848,7 @@ func (c *Control) Start() data.ErrPack {
     for _, hw := range c.hws {
         go hw.Run()
         // Currently fake trigger thresholds
-        fakethreshold := uint32(8592)
+        fakethreshold := uint32(15000)
         fmt.Printf("Using arbitrary trigger of %d.\n", fakethreshold)
         thresholds := make(map[uint32]uint32)
         for _, ch := range c.channels {
@@ -785,6 +864,7 @@ func (c *Control) Start() data.ErrPack {
             panic(err)
         }
         clk := hw.New(len(c.hws), mod, time.Second, c.exit, c.errs)
+        go clk.Run()
         c.hws = append(c.hws, clk)
         c.clock = NewClockBoard(clk, c.datatowriter)
     }
@@ -893,20 +973,37 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     time.Sleep(time.Second)
     // Tell the FPGAs to start acquisition
     c.startacquisition()
-    for _, reader := range c.readers {
+    for i, reader := range c.readers {
+        fmt.Printf("Setting up %dth reader.\n", i)
         reader.Reset()
         reader.SwapClocks()
         reader.TriggerWindow(0xff, 0x7f)
         reader.EnableReadoutChannels()
         go reader.Run(c.errs)
-        if c.internaltrigger {
-            reader.RandomTriggerRate(1.0)
-            reader.StartRandomTriggers()
-        }
+        time.Sleep(10 * time.Microsecond)
     }
     if !c.internaltrigger {
-        c.clock.RandomRate(1.0)
+        for _, reader := range c.readers {
+            reader.Stat()
+        }
+        c.clock.Reset()
+        fmt.Printf("Sending sync signal from clock board.\n")
+        c.clock.SendTrigger()
+        for _, reader := range c.readers {
+            reader.Stat()
+        }
+    }
+    time.Sleep(100 * time.Microsecond)
+    if !c.internaltrigger {
+        fmt.Printf("External triggers, starting from trigger board.\n")
+        c.clock.RandomRate(0.1)
         c.clock.StartTriggers()
+    } else {
+        for i, reader := range c.readers {
+            fmt.Printf("Internal triggers: Start triggers for reader %d.\n", i)
+            reader.RandomTriggerRate(0.1)
+            reader.StartRandomTriggers()
+        }
     }
     fmt.Printf("Running random triggers for %v.\n", r.RandomDuration)
     tick := time.NewTicker(r.RandomDuration)
@@ -917,10 +1014,10 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         fmt.Printf("Reducing random trigger rate due to ticker.\n")
         if c.internaltrigger {
             for _, reader := range c.readers {
-                    reader.RandomTriggerRate(1.0)
+                    reader.RandomTriggerRate(0.1)
             }
         } else {
-            c.clock.RandomRate(1.0)
+            c.clock.RandomRate(0.1)
         }
     case err = <-c.errs:
         fmt.Printf("Control.Run() found an error.\n")
@@ -930,8 +1027,8 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         quit = true
     }
     if !quit {
-        tick = time.NewTicker(r.TriggeredDuration)
         fmt.Printf("Running self triggers for %v.\n", r.TriggeredDuration)
+        tick = time.NewTicker(r.TriggeredDuration)
         for _, reader := range c.readers {
             reader.StartSelfTriggers()
         }

@@ -560,7 +560,7 @@ func (s *StatusResp) Parse(data []byte) error {
     loc := 4
     s.MTU = 0
     for i := 0; i < 4; i++ {
-        fmt.Printf("MTU byte %d [%d] = %X\n", i, loc + i, data[loc + i])
+        //fmt.Printf("MTU byte %d [%d] = %X\n", i, loc + i, data[loc + i])
         s.MTU += uint32(data[loc + i]) << uint32((3 - i) * 8)
     }
     loc += 4
@@ -572,7 +572,7 @@ func (s *StatusResp) Parse(data []byte) error {
     s.Next = 0
     s.Next += uint32(data[loc + 1]) << 8
     s.Next += uint32(data[loc + 2])
-    fmt.Printf("s.Next = 0x%d : %x%x\n", s.Next, data[loc + 1], data[loc + 2])
+    fmt.Printf("s.Next = 0x%x = %d\n", s.Next, s.Next)
     loc += 4
     for i := 0; i < 16; i++ {
         s.IncomingHistory = append(s.IncomingHistory, NewHistory(uint8(data[loc + i])))
@@ -587,7 +587,7 @@ func (s *StatusResp) Parse(data []byte) error {
             return err
         }
         s.ReceivedHeaders = append(s.ReceivedHeaders, p)
-        fmt.Printf("Received headers = %v\n", s.ReceivedHeaders)
+        //fmt.Printf("Received headers = %v\n", s.ReceivedHeaders)
         loc += 4
     }
     for i := 0; i < 4; i++ {

@@ -76,7 +76,7 @@ func main() {
     }
     runtime.GOMAXPROCS(6)
     fmt.Println("Solid's SM1 online DAQ software!")
-    internaltrigger := true
+    internaltrigger := false
     control := solid.New(*dir, *store, channels, &exit, internaltrigger)
     for _, mod := range mods {
         control.AddFPGA(mod)
