@@ -157,7 +157,7 @@ func (r *Reader) EnableReadoutChannels() {
         p := ipbus.MakePacket(ipbus.Control)
         chanctrl.MaskedWrite("src_sel", 0, &p)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("src_sel", 1, &p)
+        //chanctrl.MaskedWrite("src_sel", 1, &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
         //chanctrl.MaskedWrite("trig_en", 1, &p)
         r.hw.Send(p, reply)
@@ -484,7 +484,7 @@ func (r Reader) SwapClocks() {
     pack := ipbus.MakePacket(ipbus.Control)
     r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 1, &pack)
     r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("clk_sel", 1, &pack)
-    //r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 0, &pack)
+    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 0, &pack)
     reply := make(chan data.ReqResp)
     r.hw.Send(pack, reply)
     rr := <-reply
