@@ -6,6 +6,10 @@
 			<node id="slot" mask="0xf00"/>
 		</node>
 	</node>
+	<node id="buffer" address="0x2" description="readout buffer" fwinfo="endpoint;width=1">
+		<node id="data" address="0x0" mode="port" size="0x1000"/>
+		<node id="count" address="0x1"/>
+	</node>
 	<node id="csr" address="0x4" description="ctrl/status register" fwinfo="endpoint;width=2">
 		<node id="ctrl" address="0x0">
 			<node id="nuke" mask="0x1"/>
@@ -13,20 +17,51 @@
 			<node id="mmcm_rst" mask="0x4"/>
 			<node id="clk_sel" mask="0x8"/>
 			<node id="idelctrl_rst" mask="0x10"/>
+			<node id="prog" mask="0x20"/>
 			<node id="chan_sel" mask="0xff00"/>
 			<node id="board_id" mask="0xf0000000"/>
 		</node>
 		<node id="window_ctrl" address="0x1">
 			<node id="lag" mask="0xffff"/>
-			<node id="size" mask="0xffff0000"/>
+			<node id="size" mask="0x3ff0000"/>
 		</node>
 		<node id="stat" address="0x2">
 			<node id="clk_lock" mask="0x1"/>
 			<node id="clk_stop" mask="0x2"/>
 			<node id="idelctrl_rdy" mask="0x4"/>
+			<node id="ro_stop" mask="0x8"/>			
+		</node>
+	</node>
+	<node id="chan_csr" address="0x8" description="channel ctrl" fwinfo="endpoint;width=1">
+		<node id="ctrl" address="0x0">
+			<node id="sync_en" mask="0x1"/>
+			<node id="phase" mask="0x2"/>
+			<node id="src_sel" mask="0x4"/>
+			<node id="invert" mask="0x8"/>
+			<node id="shift" mask="0x70"/>
+			<node id="ro_en" mask="0x80"/>
+			<node id="trig_en" mask="0x100"/>
+			<node id="stop_mask" mask="0x200"/>
+			<node id="t_thresh" mask="0x3fff0000"/>
+		</node>
+		<node id="stat" address="0x1">
+			<node id="bp" mask="0x1"/>
+			<node id="err" mask="0x2"/>
+			<node id="derand_rdy" mask="0x4"/>
+			<node id="derand_evt" mask="0x8"/>
+			<node id="derand_aempty" mask="0x10"/>
+			<node id="derand_afull" mask="0x20"/>
+			<node id="derand_empty" mask="0x40"/>
+			<node id="derand_full" mask="0x80"/>
+			<node id="idel_ctr" mask="0x1f00"/>
 		</node>
 	</node>
 	<node id="timing" address="0x10" module="file://sc_timing.xml"/>
-	<node id="chan" address="0x20" mode="port" description="channel FIFO access" fwinfo="endpoint;width=0"/>
+	<node id="trig" address="0x20" description="trigger csr" fwinfo="endpoint;width=1">
+		<node id="ctrl" address="0x0">
+			<node id="clr" mask="0x1"/>
+		</node>
+		<node id="stat" address="0x1"/>
+	</node>
+	<node id="sysmon" address="0x400" mode="block" size="0x400" description="sysmon access" fwinfo="endpoint;width=9"/>
 </node>
-

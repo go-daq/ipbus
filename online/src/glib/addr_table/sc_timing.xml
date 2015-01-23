@@ -1,5 +1,5 @@
 <node id="timing" description="sample clock domain control" fwinfo="endpoint">
-	<node id="csr" address="0x0" description="ctrl/status register" fwinfo="endpoint;width=2">
+	<node id="csr" address="0x0" description="ctrl/status register" fwinfo="endpoint;width=1">
 		<node id="ctrl" address="0x0">
 			<node id="rst" mask="0x1"/>
 			<node id="ctr_rst" mask="0x2"/>
@@ -8,19 +8,17 @@
 			<node id="buf_rst" mask="0x10"/>
 			<node id="trig" mask="0x20"/>
 			<node id="sync_out" mask="0x40"/>
+			<node id="sync_en" mask="0x80"/>
+			<node id="fake" mask="0x100"/>
+			<node id="rand_out" mask="0x200"/>
+			<node id="rand_int" mask="0x400"/>
+			<node id="rand_div" mask="0x1f0000"/>
 		</node>
-		<node id="chan_ctrl" address="0x1">
-			<node id="sync_en" mask="0x1"/>
-			<node id="phase" mask="0x2"/>
-			<node id="src_sel" mask="0x4"/>
-			<node id="invert" mask="0x8"/>
-			<node id="shift" mask="0x70"/>
-		</node>
-		<node id="stat" address="0x2"/>
 	</node>
 	<node id="counter" address="0x4" description="local sample counter" fwinfo="endpoint;width=1">
 		<node id="bottom" address="0x0"/>
 		<node id="top" address="0x1"/>
 	</node>
+	<node id="trig_ctr" address="0x6" description="trigger counter" fwinfo="endpoint;width=0"/>
 </node>
 
