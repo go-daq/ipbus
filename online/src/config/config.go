@@ -1,14 +1,23 @@
-package main
+package config
 
 import (
+    "errors"
     "fmt"
     "io/ioutil"
     "encoding/json"
 //    "os"
 )
 
-func NewGLIB(alignmentfn, pedspafn, maskfn) {
-
+func NewGLIB(alignmentfn, pedspafn, maskfn string) {
+    data, err := ioutil.ReadFile(alignmentfn)
+    if err != nil {
+        panic(err)
+    }
+    chandelays := []TimingOffset{}
+    err = json.Unmarshal(data, &chandelays)
+    if err != nil {
+        panic(err)
+    }
 }
 
 type Glib struct {
@@ -32,13 +41,13 @@ func (g Glib) CalcThresholds(thr float64) {
 type DataChannel struct {
     ChanID
     TriggerEnabled, ReadoutEnabled bool
-    Phase, Invert bool
-    Shift, Offset int
+    Phase, Invert uint32
+    Shift, Increment uint32
     Pedestal, SPA float64
     Threshold uint32
 }
 
-func (dc *DataChannel) merge(offset ChannelTimingOffset, pedspa ChannelPedSPA, masks CannelMasks) error {
+func (dc *DataChannel) merge(offset TimingOffset, pedspa PedSPA, masks Masks) error {
     if offset.GLIB != dc.GLIB || offset.Channel != dc.Channel {
         return errors.New("Channel merge fail: offset from different channel")
     }
@@ -53,16 +62,17 @@ func (dc *DataChannel) merge(offset ChannelTimingOffset, pedspa ChannelPedSPA, m
     dc.SPA = pedspa.SinglePixelAmplitude
     dc.ReadoutEnabled = true
     dc.TriggerEnabled = true
-    for _, ch := range masks.ReadoutDisable {
-        if ch.GLIB == dc.GLIB && ch.Channel = dc.Channel {
+    for _, ch := range masks.ReadoutDisabled {
+        if ch.GLIB == dc.GLIB && ch.Channel == dc.Channel {
             dc.ReadoutEnabled = false
         }
     }
-    for _, ch := range masks.TriggerDisable {
-        if ch.GLIB == dc.GLIB && ch.Channel = dc.Channel {
+    for _, ch := range masks.TriggerDisabled {
+        if ch.GLIB == dc.GLIB && ch.Channel == dc.Channel {
             dc.TriggerEnabled = false
         }
     }
+    return error(nil)
 }
 
 func (dc *DataChannel) SetThreshold(t uint32) {
@@ -70,7 +80,7 @@ func (dc *DataChannel) SetThreshold(t uint32) {
 }
 
 func (dc *DataChannel) CalcThreshold(tspa float64) {
-    thr := dc.Pdestal + tspa * dc.SPA
+    thr := dc.Pedestal + tspa * dc.SPA
     dc.Threshold = uint32(thr)
 }
 
@@ -101,20 +111,4 @@ func (o TimingOffset) String() string {
     return fmt.Sprintf("%s: inv = %d, phase = %d, shift = %d, incs = %d",
                         o.ChanID.String(), o.Invert, o.Phase, o.Shift,
                         o.Increment)
-}
-
-func main() {
-    data, err := ioutil.ReadFile("align_GLIB6.json")
-    if err != nil {
-        panic(err)
-    }
-    chandelays := []ChannelTimingOffset{}
-    err = json.Unmarshal(data, &chandelays)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println("Read channels:")
-    for _, ch := range chandelays {
-        fmt.Printf("    %v\n", ch)
-    }
 }
