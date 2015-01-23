@@ -495,57 +495,79 @@ func (r *Reader) ScopeModeRun(errs chan data.ErrPack) {
 }
 
 func (r Reader) Reset() {
-    fmt.Printf("HW%d: doing reset.\n", r.hw.Num)
     csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     csrstat := r.hw.Module.Registers["csr"].Words["stat"]
     idmagic := r.hw.Module.Registers["id"].Words["magic"]
     idinfo := r.hw.Module.Registers["id"].Words["info"]
     timingcsrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    reply := make(chan data.ReqResp)
+    // Do software reset
     fmt.Printf("Doing software reset.\n")
     p := ipbus.MakePacket(ipbus.Control)
     csrctrl.MaskedWrite("soft_rst", 1, &p)
-    reply := make(chan data.ReqResp)
     r.hw.Send(p, reply)
     rr := <-reply
     r.towrite <- rr
     time.Sleep(time.Second)
 
-    pack := ipbus.MakePacket(ipbus.Control)
-    csrctrl.MaskedWrite("idelctrl_rst", 1, &pack)
-    csrctrl.MaskedWrite("idelctrl_rst", 1, &pack)
-    csrctrl.MaskedWrite("idelctrl_rst", 0, &pack)
-    //csrctrl.MaskedWrite("mmcm_rst", 1, &pack)
-    csrctrl.MaskedWrite("clk_sel", 1, &pack)
-    //csrctrl.MaskedWrite("mmcm_rst", 0, &pack)
-    fmt.Printf("Reading id.magic and id.info\n")
-    idmagic.Read(&pack)
-    idinfo.Read(&pack)
-    fmt.Printf("Doing timing.csr.ctrl reset, enabling sync.\n")
-    timingcsrctrl.MaskedWrite("ctr_rst", 1, &pack)
-    timingcsrctrl.MaskedWrite("ctr_rst", 0, &pack)
-    timingcsrctrl.MaskedWrite("sync_en", 1, &pack)
-    //timingcsrctrl.MaskedWrite("buf_rst", 1, &pack)
-    fmt.Printf("Reading csr.stat\n")
-    csrstat.Read(&pack)
-    r.hw.Send(pack, reply)
+    // If no clock lock do mmcm reset
+    p = ipbus.MakePacket(ipbus.Control)
+    csrstat.Read(&p)
+    r.hw.Send(p, reply)
     rr = <-reply
-    magicids := idmagic.GetReads(rr)
-    if len(magicids) > 0 {
-        fmt.Printf("Board is alive: magic ID = 0x%x\n", magicids[0])
-    }
-    infos := idinfo.GetReads(rr)
-    if len(infos) > 0 {
-        fmt.Printf("info: 0x%x\n", infos[0])
-    }
-    stats := csrstat.GetReads(rr)
-    if len(stats) > 0 {
-        fmt.Printf("csr.stat: 0x%08x\n", stats[0])
-        fmt.Printf("csr.stat.clk_lock = %d\n", csrstat.GetMaskedReads("clk_lock", rr)[0])
-        fmt.Printf("csr.stat.ro_stop = %d\n", csrstat.GetMaskedReads("ro_stop", rr)[0])
-    }
+    clk_lock := csrstat.GetMaskedReads(rr)[0][0]
     r.towrite <- rr
-    time.Sleep(time.Second)
-    //r.hw.ConfigDevice()
+    if clk_lock == 0 {
+        fmt.Printf("No clock lock, reseting mmcm.\n")
+        p = ipbus.MakePacket(ipbus.Control)
+        csrctrl.MaskedWrite("mmcm_rst", 1, &p)
+        csrctrl.MaskedWrite("mmcm_rst", 0, &p)
+        r.hw.Send(p, reply)
+        rr = <-reply
+        r.towrite <- rr
+        time.Sleep(time.Second)
+    }
+    // Select external clock and external synchronisation
+    fmt.Printf("Selecting external clock and enabling synchronisation.\n")
+    p = ipbus.MakePacket(ipbus.Control)
+    csrctrl.MaskedWrite("clk_sel", 1, &p)
+    timingcsrctrl.MaskedWrite("sync_en", 1, &p)
+    r.hw.Send(p, reply)
+    rr = <-reply
+    r.towrite <- rr
+    // Reset timing
+    fmt.Printf("Resetting timing.\n")
+    p = ipbus.MakePacket(ipbus.Control)
+    timingcsrctrl.MaskedWrite("rst", 1, &p)
+    timingcsrctrl.MaskedWrite("rst", 0, &p)
+    r.hw.Send(p, reply)
+    rr = <-reply
+    r.towrite <- rr
+    // Reset delays
+    fmt.Printf("Resetting delay control.\n")
+    p = ipbus.MakePacket(ipbus.Control)
+    timingcsrctrl.MaskedWrite("idelctrl_rst", 1, &p)
+    timingcsrctrl.MaskedWrite("idelctrl_rst", 1, &p)
+    timingcsrctrl.MaskedWrite("idelctrl_rst", 0, &p)
+    r.hw.Send(p, reply)
+    rr = <-reply
+    r.towrite <- rr
+    // Reset timing buffers (enable sync on all channels first)
+    fmt.Printf("Resetting timing buffers.\n")
+    for _, ch := range r.channels {
+        p = ipbus.MakePacket(ipbus.Control)
+        csrctrl.MaskedWrite("chan_sel", ch, &p)
+        chanctrl.MaskedWrite("sync_en", 1, &p)
+        r.hw.Send(p, reply)
+        rr = <-reply
+        r.towrite <- rr
+    }
+    p = ipbus.MakePacket(ipbus.Control)
+    timingcsrctrl.MaskedWrite("buf_rst", 1, &p)
+    timingcsrctrl.MaskedWrite("buf_rst", 0, &p)
+    r.hw.Send(p, reply)
+    rr = <-reply
+    r.towrite <- rr
 }
 
 func (r Reader) Stat() {
@@ -571,20 +593,9 @@ func (r Reader) Stat() {
     r.towrite <- rr
 }
 
-func (r Reader) SwapClocks() {
-    fmt.Printf("HW%d: Swapping clock.\n", r.hw.Num)
-    pack := ipbus.MakePacket(ipbus.Control)
-    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 1, &pack)
-    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("clk_sel", 1, &pack)
-    r.hw.Module.Registers["csr"].Words["ctrl"].MaskedWrite("mmcm_rst", 0, &pack)
-    reply := make(chan data.ReqResp)
-    r.hw.Send(pack, reply)
-    rr := <-reply
-    r.towrite <- rr
-}
-
 func (r Reader) Align() {
-    fmt.Printf("HW%d: Doing alignment.\n", )
+    fmt.Printf("HW%d: Need to implement alignment.\n", )
+    /*
     // Get alignment constants
     shifts:= []uint32{}
     incs := []uint32{}
@@ -630,6 +641,7 @@ func (r Reader) Align() {
     r.hw.Send(pack, reply)
     rr = <-reply
     r.towrite <-rr
+    */
 }
 
 
