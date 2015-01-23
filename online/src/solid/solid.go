@@ -187,6 +187,7 @@ func (r *Reader) EnableReadoutChannels() {
         p := ipbus.MakePacket(ipbus.Control)
         fmt.Printf("Selecting channel %d\n", ch)
         ctrl.MaskedWrite("chan_sel", ch, &p)
+        //chanctrl.MaskedWrite("src_sel", 1, &p)
         ctrl.Read(&p)
         stat.Read(&p)
         chanctrl.Read(&p)
