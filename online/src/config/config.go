@@ -8,7 +8,7 @@ import (
 //    "os"
 )
 
-func NewGLIB(alignmentfn, pedspafn, maskfn string) {
+func NewGLIB(module int, alignmentfn, pedspafn, maskfn string) Glib {
     data, err := ioutil.ReadFile(alignmentfn)
     if err != nil {
         panic(err)
@@ -18,6 +18,55 @@ func NewGLIB(alignmentfn, pedspafn, maskfn string) {
     if err != nil {
         panic(err)
     }
+    data, err = ioutil.ReadFile(pedspafn)
+    if err != nil {
+        panic(err)
+    }
+    chanpedspas := []PedSPA{}
+    err = json.Unmarshal(data, &chanpedspas)
+    if err != nil {
+        panic(err)
+    }
+    data, err = ioutil.ReadFile(maskfn)
+    if err != nil {
+        panic(err)
+    }
+    masks := Masks{}
+    err = json.Unmarshal(data, &masks)
+    if err != nil {
+        panic(err)
+    }
+    chans := []*DataChannel{}
+    for i := uint32(0); i < 76; i++ {
+        id := ChanID{GLIB: uint32(module), Channel: i}
+        dc := &DataChannel{ChanID: id}
+        foundoffset := false
+        offset := TimingOffset{}
+        for _, off := range chandelays {
+            if off.GLIB == dc.GLIB && off.Channel == dc.Channel {
+                offset = off
+                foundoffset = true
+            }
+        }
+        if !foundoffset {
+            continue
+        }
+        pedspa := PedSPA{}
+        for _, p := range chanpedspas {
+            if p.GLIB == dc.GLIB && p.Channel == dc.Channel {
+                pedspa = p
+            }
+        }
+        err := dc.merge(offset, pedspa, masks)
+        if err != nil {
+            panic(err)
+        }
+        chans = append(chans, dc)
+    }
+    triggers := []uint32{0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88,
+                         0x89}
+    g := Glib{Module: module, DataChannels: chans, TriggerChannels: triggers}
+    return g
 }
 
 type Glib struct {
