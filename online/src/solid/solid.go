@@ -166,20 +166,11 @@ func NewReader(hw *hw.HW, towrite chan data.ReqResp, period, dt time.Duration, c
 func (r *Reader) TriggerWindow(length, offset uint32) {
     fmt.Printf("Setting trigger window length = %d, offset = %d.\n", length, offset)
     reply := make(chan data.ReqResp)
-    //ctrlreg := r.hw.Module.Registers["csr"].Words["ctrl"]
-    timereg := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
     winreg := r.hw.Module.Registers["csr"].Words["window_ctrl"]
     p := ipbus.MakePacket(ipbus.Control)
-    //ctrlreg.MaskedWrite("idelctrl_rst", 1, &p)
-    //ctrlreg.MaskedWrite("idelctrl_rst", 1, &p)
-    //ctrlreg.MaskedWrite("idelctrl_rst", 0, &p)
-    timereg.MaskedWrite("rst", 1, &p)
-    timereg.MaskedWrite("rst", 0, &p)
     winreg.MaskedWrite("lag", offset, &p)
     winreg.MaskedWrite("size", length, &p)
     winreg.Read(&p)
-    //timereg.MaskedWrite("ctr_rst", 1, &p)
-    //timereg.MaskedWrite("ctr_rst", 0, &p)
     r.hw.Send(p, reply)
     rr := <-reply
     r.towrite <- rr
@@ -190,7 +181,7 @@ func (r *Reader) EnableReadoutChannels() {
     fmt.Printf("Enabling readout on data and trigger channels: %v, %v\n", r.channels, r.triggerchannels)
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
-    chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
+    chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     stat := r.hw.Module.Registers["csr"].Words["stat"]
     for _, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
@@ -213,7 +204,6 @@ func (r *Reader) EnableReadoutChannels() {
     for _, ch := range r.triggerchannels {
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        //chanctrl.MaskedWrite("src_sel", 1, &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
         r.hw.Send(p, reply)
         rr := <-reply
@@ -224,13 +214,11 @@ func (r *Reader) EnableReadoutChannels() {
 func (r *Reader) StartSelfTriggers() {
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
-    chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
-    threshold := r.hw.Module.Registers["csr"].Words["chan_t_thresh"]
+    chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     for _, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        //chanctrl.MaskedWrite("src_sel", 1, &p)
-        threshold.Write(r.thresholds[ch], &p)
+        chanctrl.MaksedWrite("t_thresh", r.thresholds[ch], &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
         chanctrl.MaskedWrite("trig_en", 1, &p)
         r.hw.Send(p, reply)
@@ -242,12 +230,10 @@ func (r *Reader) StartSelfTriggers() {
 func (r *Reader) StopSelfTriggers() {
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
-    chanctrl := r.hw.Module.Registers["csr"].Words["chan_ctrl"]
+    chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     for _, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        //chanctrl.MaskedWrite("src_sel", 1, &p)
-        chanctrl.MaskedWrite("ro_en", 0, &p)
         chanctrl.MaskedWrite("trig_en", 0, &p)
         r.hw.Send(p, reply)
         rr := <-reply
@@ -255,6 +241,7 @@ func (r *Reader) StopSelfTriggers() {
     }
 }
 
+/*
 func (r *Reader) RandomTriggerRate(rate float64) {
     rdiv := uint32(math.Log2(62.5e6) - math.Log2(rate) - 1.0)
     rrate := 62.5e6 / (math.Pow(2, float64(rdiv + 1)))
@@ -298,6 +285,7 @@ func (r *Reader) StopRandomTriggers() {
     rr := <-reply
     r.towrite <- rr
 }
+*/
 
 func (r *Reader) SendSoftwareTriggers(n int) {
     reply := make(chan data.ReqResp)
@@ -305,8 +293,8 @@ func (r *Reader) SendSoftwareTriggers(n int) {
     ctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
     for i := 0; i < n; i++ {
         ctrl.MaskedWrite("trig", 1, &p)
+        ctrl.MaskedWrite("trig", 0, &p)
     }
-    ctrl.MaskedWrite("trig", 0, &p)
     r.hw.Send(p, reply)
     rr := <-reply
     r.towrite <- rr
@@ -315,7 +303,7 @@ func (r *Reader) SendSoftwareTriggers(n int) {
 
 func (r *Reader) StopTriggers() {
     r.StopSelfTriggers()
-    r.StopRandomTriggers()
+    //r.StopRandomTriggers()
 }
 
 func (r *Reader) Run(errs chan data.ErrPack) {
