@@ -8,6 +8,14 @@ import (
 //    "os"
 )
 
+func Load(module int) Glib {
+    alignmentfn := fmt.Sprintf("align_GLIB%d.json", module)
+    pedspafn := fmt.Sprintf("pedspa_GLIB%d.json", module)
+    maskfn := fmt.Sprintf("masks_GLIB%d.json", module)
+    return NewGLIB(module, alignmentfn, pedspafn, maskfn)
+
+}
+
 func NewGLIB(module int, alignmentfn, pedspafn, maskfn string) Glib {
     data, err := ioutil.ReadFile(alignmentfn)
     if err != nil {
@@ -94,6 +102,14 @@ type DataChannel struct {
     Shift, Increment uint32
     Pedestal, SPA float64
     Threshold uint32
+}
+
+func (d DataChannel) String() string {
+    msg := fmt.Sprintf("%s: trigger = %t, readout = %t. ", d.ChanID.String(), d.TriggerEnabled, d.ReadoutEnabled)
+    msg += fmt.Sprintf("ph%d, inv%d, sh%d, inc%d. ", d.Phase, d.Invert, d.Shift, d.Increment)
+    msg += fmt.Sprintf("Ped = %f, SPA = %f.", d.Pedestal, d.SPA)
+    msg += fmt.Sprintf("Threshold = %d.", d.Threshold)
+    return msg
 }
 
 func (dc *DataChannel) merge(offset TimingOffset, pedspa PedSPA, masks Masks) error {
