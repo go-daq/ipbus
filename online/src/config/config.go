@@ -95,6 +95,15 @@ func (g Glib) CalcThresholds(thr float64) {
     }
 }
 
+func (g Glib) GetThreshold(channel uint32) (uint32, error) {
+    for _, ch := range g.DataChannels {
+        if ch.Channel == channel {
+            return ch.Threshold, error(nil)
+        }
+    } 
+    return uint32(0x3fff), fmt.Errorf("Unknown channel: %d", channel)
+}
+
 type DataChannel struct {
     ChanID
     TriggerEnabled, ReadoutEnabled bool
@@ -148,6 +157,7 @@ func (dc *DataChannel) CalcThreshold(tspa float64) {
     thr := dc.Pedestal + tspa * dc.SPA
     dc.Threshold = uint32(thr)
 }
+
 
 type ChanID struct {
     GLIB, Channel uint32

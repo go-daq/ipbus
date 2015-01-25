@@ -16,9 +16,9 @@ import (
 func main() {
     dir := flag.String("dir", ".", "output directory")
     name := flag.String("name", "testing", "part of output filename")
-    randomperiod := flag.Int("randomtime", 30, "Length of run [s]")
-    triggeredperiod := flag.Int("triggertime", 870, "Length of run [s]")
-    nchans := flag.Int("nchans", 38, "Number of channels per GLIB.")
+    duration := flag.Int("duration", 30, "Length o run [s]")
+    threshold := flag.Int("threshold", -1, "Trigger threshold [ADC count above pedestal")
+    nchans := flag.Int("nchans", 76, "Number of channels per GLIB.")
     nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
     store := flag.String("store", "", "Long term storage location.")
     glibs := flag.String("glib", "GLIB", "Comma separated string of GLIB module names (e.g. 'GLIB1,GLIB2,GLIB5')")
@@ -89,12 +89,17 @@ func main() {
         return
     }
     irun := 0
-    dtrandom := time.Duration(*randomperiod) * time.Second
-    dttriggered := time.Duration(*triggeredperiod) * time.Second
+    dt := time.Duration(*duration) * time.Second
     for *nruns < 0 || irun < *nruns {
         fmt.Printf("Making %dth run.\n", irun)
-        fn := "triggered_" + *name
-        r, err := data.NewRun(uint32(irun), fn, dtrandom, dttriggered)
+        fn := "triggered_"
+        if *threshold < 0 {
+            fn += "random_"
+        } else {
+            fn += fmt.Sprintf("thr%d_", *threshold)
+        }
+        fn += *name
+        r, err := data.NewRun(uint32(irun), fn, dt, *threshold)
         if err != nil {
             panic(err)
         }

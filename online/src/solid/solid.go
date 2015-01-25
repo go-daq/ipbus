@@ -159,12 +159,10 @@ type Reader struct{
 }
 
 func NewReader(hw *hw.HW, cfg config.Glib, towrite chan data.ReqResp, period,
-               dt time.Duration, channels []uint32,
-               thresholds map[uint32]uint32, exit *crash.Exit) *Reader {
+               dt time.Duration, channels []uint32, exit *crash.Exit) *Reader {
     triggerchannels := []uint32{0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89}
     r := Reader{hw: hw, cfg: cfg, towrite: towrite, period: period, dt: dt,
-                channels: channels, triggerchannels: triggerchannels,
-                thresholds: thresholds, exit: exit}
+                channels: channels, triggerchannels: triggerchannels, exit: exit}
     r.Stop = make(chan bool)
     return &r
 }
@@ -182,6 +180,39 @@ func (r *Reader) TriggerWindow(length, offset uint32) {
     r.towrite <- rr
 }
 
+func (r *Reader) DisableReadout() {
+    reply := make(chan data.ReqResp)
+    ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
+    stat := r.hw.Module.Registers["csr"].Words["stat"]
+    for _, ch := range r.channels {
+        p := ipbus.MakePacket(ipbus.Control)
+        fmt.Printf("Selecting channel %d\n", ch)
+        ctrl.MaskedWrite("chan_sel", ch, &p)
+        ctrl.Read(&p)
+        stat.Read(&p)
+        chanctrl.Read(&p)
+        fmt.Printf("Disabling readout.\n")
+        chanctrl.MaskedWrite("ro_en", 0, &p)
+        stat.Read(&p)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        ctrls := stat.GetReads(rr)
+        if len(ctrls) > 0 {
+            fmt.Printf("csr.stat = %x\n", ctrls)
+        }
+        r.towrite <- rr
+    }
+    for _, ch := range r.triggerchannels {
+        p := ipbus.MakePacket(ipbus.Control)
+        ctrl.MaskedWrite("chan_sel", ch, &p)
+        chanctrl.MaskedWrite("ro_en", 0, &p)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        r.towrite <- rr
+    }
+
+    }
 // Initially enable all data and trigger channels
 func (r *Reader) EnableReadoutChannels() {
     fmt.Printf("Enabling readout on data and trigger channels: %v, %v\n", r.channels, r.triggerchannels)
@@ -218,14 +249,19 @@ func (r *Reader) EnableReadoutChannels() {
     }
 }
 
-func (r *Reader) StartSelfTriggers() {
+func (r *Reader) StartSelfTriggers(thr uint32) {
+    r.cfg.SetThresholds(thr)
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     for _, ch := range r.channels {
+        thr, err := r.cfg.GetThreshold(ch)
+        if err != nil {
+            panic(err)
+        }
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("t_thresh", r.thresholds[ch], &p)
+        chanctrl.MaskedWrite("t_thresh", thr, &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
         chanctrl.MaskedWrite("trig_en", 1, &p)
         r.hw.Send(p, reply)
@@ -863,15 +899,8 @@ func (c *Control) Start() data.ErrPack {
     fmt.Println("Setting up HW and readers.")
     for _, hw := range c.hws {
         go hw.Run()
-        // Currently fake trigger thresholds
-        fakethreshold := uint32(12000)
-        fmt.Printf("Using arbitrary trigger of %d.\n", fakethreshold)
-        thresholds := make(map[uint32]uint32)
-        for _, ch := range c.channels {
-            thresholds[ch] = fakethreshold
-        }
         cfg := config.Load(hw.Num)
-        r := NewReader(hw, cfg, c.datatowriter, time.Second, time.Microsecond, c.channels, thresholds, c.exit)
+        r := NewReader(hw, cfg, c.datatowriter, time.Second, time.Microsecond, c.channels, c.exit)
         c.readers = append(c.readers, r)
     }
 
@@ -990,7 +1019,7 @@ func (c Control) stopacquisition() {
 // Start and stop a run
 func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     // Tell the writer to start a new file
-    fmt.Printf("Starting run for %v with random triggers and %v with self triggers.\n", r.RandomDuration, r.TriggeredDuration)
+    fmt.Printf("Starting run for %v.\n", r.Duration)
     c.runtowriter <- r
     time.Sleep(time.Second)
     // Tell the FPGAs to start acquisition
@@ -999,6 +1028,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         fmt.Printf("Setting up %dth reader.\n", i)
         reader.Reset()
         reader.TriggerWindow(0xff, 0x7f)
+        reader.Align()
         reader.EnableReadoutChannels()
         go reader.Run(c.errs)
         time.Sleep(10 * time.Microsecond)
@@ -1015,47 +1045,14 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         }
     }
     time.Sleep(100 * time.Microsecond)
-    if !c.internaltrigger {
-        fmt.Printf("External triggers, starting from trigger board.\n")
-        c.clock.RandomRate(125.5)
-        c.clock.StartTriggers()
-    } else {
-        /*
-        for i, reader := range c.readers {
-            fmt.Printf("Internal triggers: Start triggers for reader %d.\n", i)
-            reader.RandomTriggerRate(0.1)
-            reader.StartRandomTriggers()
-        }
-        */
-    }
-    fmt.Printf("Running random triggers for %v.\n", r.RandomDuration)
-    tick := time.NewTicker(r.RandomDuration)
-    err := data.MakeErrPack(error(nil))
+    // If threshold is +ve then do a triggered run, otherwise do a random run
     quit := false
-    select {
-    case <-tick.C:
-        fmt.Printf("Reducing random trigger rate due to ticker.\n")
-        if c.internaltrigger {
-            /*
-            for _, reader := range c.readers {
-                reader.RandomTriggerRate(0.1)
-            }
-            */
-        } else {
-            c.clock.RandomRate(0.01)
-        }
-    case err = <-c.errs:
-        fmt.Printf("Control.Run() found an error.\n")
-        quit = true
-    case <-c.signals:
-        fmt.Printf("Run stopped by ctrl-c.\n")
-        quit = true
-    }
-    if !quit {
-        fmt.Printf("Running self triggers for %v.\n", r.TriggeredDuration)
-        tick = time.NewTicker(r.TriggeredDuration)
+    err := data.MakeErrPack(error(nil))
+    if r.Threshold >= 0 {
+        fmt.Printf("Running self triggers for %v.\n", r.Duration)
+        tick := time.NewTicker(r.Duration)
         for _, reader := range c.readers {
-            reader.StartSelfTriggers()
+            reader.StartSelfTriggers(uint32(r.Threshold))
         }
         select {
         case <-tick.C:
@@ -1072,6 +1069,39 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
             fmt.Printf("Run stopped by ctrl-c.\n")
             quit = true
         }
+        tick.Stop()
+    } else { // run with random triggers
+        randomrate := 10.0 // Hz per channel
+        if !c.internaltrigger {
+            fmt.Printf("External triggers, starting from trigger board.\n")
+            c.clock.RandomRate(randomrate)
+            c.clock.StartTriggers()
+        } else {
+            /*
+            for i, reader := range c.readers {
+                fmt.Printf("Internal triggers: Start triggers for reader %d.\n", i)
+                reader.RandomTriggerRate(randomrate)
+                reader.StartRandomTriggers()
+            }
+            */
+        }
+        fmt.Printf("Running random triggers for %v.\n", r.Duration)
+        tick := time.NewTicker(r.Duration)
+        select {
+        case <-tick.C:
+            fmt.Printf("Reducing random trigger rate due to ticker.\n")
+        case err = <-c.errs:
+            fmt.Printf("Control.Run() found an error.\n")
+            quit = true
+        case <-c.signals:
+            fmt.Printf("Run stopped by ctrl-c.\n")
+            quit = true
+        }
+        tick.Stop()
+    }   
+    for _, reader := range c.readers {
+        reader.StopTriggers()
+        reader.DisableReadout()
     }
     // Stop the FPGAs
     // Really I should do this unless the error is something that would cause
@@ -1080,7 +1110,6 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     for _, r := range c.readers {
         r.Stop <- true
     }
-    tick.Stop()
     return quit, err
 }
 
