@@ -17,6 +17,7 @@ import (
     "net"
     "os"
     "os/signal"
+    "strconv"
     "strings"
     "time"
 )
@@ -869,7 +870,7 @@ func (c *Control) Start() data.ErrPack {
         for _, ch := range c.channels {
             thresholds[ch] = fakethreshold
         }
-        cfg := config.Glib{Module: hw.Num}
+        cfg := config.Load(hw.Num)
         r := NewReader(hw, cfg, c.datatowriter, time.Second, time.Microsecond, c.channels, thresholds, c.exit)
         c.readers = append(c.readers, r)
     }
@@ -879,7 +880,7 @@ func (c *Control) Start() data.ErrPack {
         if err != nil {
             panic(err)
         }
-        clk := hw.New(len(c.hws), mod, time.Second, c.exit, c.errs)
+        clk := hw.New(0, mod, time.Second, c.exit, c.errs)
         go clk.Run()
         c.hws = append(c.hws, clk)
         c.clock = NewClockBoard(clk, c.datatowriter)
@@ -903,7 +904,12 @@ func (c *Control) Start() data.ErrPack {
 }
 
 func (c *Control) AddFPGA(mod glibxml.Module) {
-    hw := hw.New(len(c.hws), mod, time.Second, c.exit, c.errs)
+    name := strings.Replace(mod.Name, "GLIB", "", 1)
+    num, err := strconv.ParseInt(name, 10, 32)
+    if err != nil {
+        panic(err)
+    }
+    hw := hw.New(int(num), mod, time.Second, c.exit, c.errs)
     c.hws = append(c.hws, hw)
 }
 
