@@ -355,10 +355,22 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     r.read = make(chan data.ReqResp, 100)
     running := true
     bufferlen := uint32(0)
-    bufferdata := r.hw.Module.Registers["buffer"].Ports["data"]
-    buffersize := r.hw.Module.Registers["buffer"].Words["count"]
-    stat := r.hw.Module.Registers["csr"].Words["stat"]
-    timecontrol := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    bufferdata, ok := r.hw.Module.Registers["buffer"].Ports["data"]
+    if !ok {
+        panic(fmt.Errorf("buffer.data port not found."))
+    }
+    buffersize, ok := r.hw.Module.Registers["buffer"].Words["count"]
+    if !ok {
+        panic(fmt.Errorf("buffer.count word not found."))
+    }
+    stat, ok := r.hw.Module.Registers["csr"].Words["stat"]
+    if !ok {
+        panic(fmt.Errorf("csr.stat word not found."))
+    }
+    timecontrol, ok := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    if !ok {
+        panic(fmt.Errorf("timing.csr.ctrl word not found."))
+    }
     emptybufferdelay := 5 * time.Millisecond
     nempty := 0
     ndata := 0
