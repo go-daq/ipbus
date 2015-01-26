@@ -1071,7 +1071,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         }
         tick.Stop()
     } else { // run with random triggers
-        randomrate := 10.0 // Hz per channel
+        randomrate := 1.0 // Hz per channel
         if !c.internaltrigger {
             fmt.Printf("External triggers, starting from trigger board.\n")
             c.clock.RandomRate(randomrate)

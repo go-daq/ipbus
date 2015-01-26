@@ -122,6 +122,7 @@ func (d DataChannel) String() string {
 }
 
 func (dc *DataChannel) merge(offset TimingOffset, pedspa PedSPA, masks Masks) error {
+    fmt.Printf("Merging %v, %v and %v\n", offset, pedspa, masks)
     if offset.GLIB != dc.GLIB || offset.Channel != dc.Channel {
         return errors.New("Channel merge fail: offset from different channel")
     }
