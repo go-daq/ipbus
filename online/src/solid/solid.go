@@ -220,26 +220,46 @@ func (r *Reader) EnableReadoutChannels() {
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     stat := r.hw.Module.Registers["csr"].Words["stat"]
-    for _, ch := range r.channels {
-        p := ipbus.MakePacket(ipbus.Control)
-        fmt.Printf("Selecting channel %d\n", ch)
-        ctrl.MaskedWrite("chan_sel", ch, &p)
-        //chanctrl.MaskedWrite("src_sel", 1, &p)
-        ctrl.Read(&p)
-        stat.Read(&p)
-        chanctrl.Read(&p)
-        fmt.Printf("Enabling readout.\n")
-        chanctrl.MaskedWrite("ro_en", 1, &p)
-        stat.Read(&p)
-        r.hw.Send(p, reply)
-        rr := <-reply
-        ctrls := stat.GetReads(rr)
-        if len(ctrls) > 0 {
-            fmt.Printf("csr.stat = %x\n", ctrls)
+    for _, ch := range r.cfg.DataChannels {
+        if !ch.ReadoutEnabled {
+            fmt.Printf("Readout disabled for channel %d\n", ch.Channel)
+            p := ipbus.MakePacket(ipbus.Control)
+            fmt.Printf("Selecting channel %d\n", ch)
+            ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
+            //chanctrl.MaskedWrite("src_sel", 1, &p)
+            ctrl.Read(&p)
+            stat.Read(&p)
+            chanctrl.Read(&p)
+            chanctrl.MaskedWrite("ro_en", 0, &p)
+            stat.Read(&p)
+            r.hw.Send(p, reply)
+            rr := <-reply
+            ctrls := stat.GetReads(rr)
+            if len(ctrls) > 0 {
+                fmt.Printf("csr.stat = %x\n", ctrls)
+            }
+            r.towrite <- rr
+        } else {
+            p := ipbus.MakePacket(ipbus.Control)
+            fmt.Printf("Selecting channel %d\n", ch)
+            ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
+            //chanctrl.MaskedWrite("src_sel", 1, &p)
+            ctrl.Read(&p)
+            stat.Read(&p)
+            chanctrl.Read(&p)
+            fmt.Printf("Enabling readout.\n")
+            chanctrl.MaskedWrite("ro_en", 1, &p)
+            stat.Read(&p)
+            r.hw.Send(p, reply)
+            rr := <-reply
+            ctrls := stat.GetReads(rr)
+            if len(ctrls) > 0 {
+                fmt.Printf("csr.stat = %x\n", ctrls)
+            }
+            r.towrite <- rr
         }
-        r.towrite <- rr
     }
-    for _, ch := range r.triggerchannels {
+    for _, ch := range r.cfg.TriggerChannels {
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
         chanctrl.MaskedWrite("ro_en", 1, &p)
@@ -254,20 +274,30 @@ func (r *Reader) StartSelfTriggers(thr uint32) {
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
-    for _, ch := range r.channels {
-        thr, err := r.cfg.GetThreshold(ch)
-        if err != nil {
-            panic(err)
+    for _, ch := range r.cfg.DataChannels {
+        if !ch.TriggerEnabled {
+            fmt.Printf("GLIB%d, channel %d trigger disabled.\n", r.hw.Num, ch.Channel)
+            p := ipbus.MakePacket(ipbus.Control)
+            ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
+            chanctrl.MaskedWrite("trig_en", 0, &p)
+            r.hw.Send(p, reply)
+            rr := <-reply
+            r.towrite <- rr
+        } else {
+            thr, err := r.cfg.GetThreshold(ch.Channel)
+            if err != nil {
+                panic(err)
+            }
+            fmt.Printf("GLIB%d: Set channel %d threshold = %d\n", r.hw.Num, ch, thr)
+            p := ipbus.MakePacket(ipbus.Control)
+            ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
+            chanctrl.MaskedWrite("t_thresh", thr, &p)
+            chanctrl.MaskedWrite("ro_en", 1, &p)
+            chanctrl.MaskedWrite("trig_en", 1, &p)
+            r.hw.Send(p, reply)
+            rr := <-reply
+            r.towrite <- rr
         }
-        fmt.Printf("GLIB%d: Set channel %d threshold = %d\n", r.hw.Num, ch, thr)
-        p := ipbus.MakePacket(ipbus.Control)
-        ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("t_thresh", thr, &p)
-        chanctrl.MaskedWrite("ro_en", 1, &p)
-        chanctrl.MaskedWrite("trig_en", 1, &p)
-        r.hw.Send(p, reply)
-        rr := <-reply
-        r.towrite <- rr
     }
 }
 
@@ -412,18 +442,24 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // Get replies from the read request, send data to writer's channel and
         // sleep for period based upon Number of words ready to read
         case data := <-r.read:
-            if nempty == 300 {
+            if nempty % 500 == 0 {
                 stats := stat.GetReads(data)
                 if len(stats) > 0 {
-                    fmt.Printf("300 empty buffer packets. csr.stat = 0x%08x\n", stats[0])
+                    fmt.Printf("GLIB%d %d empty buffer packets. csr.stat = 0x%08x\n", r.hw.Num, nempty, stats[0])
+                    ro_stop := stat.GetMaskedReads("ro_stop", data)[0]
+                    if ro_stop > 0 {
+                        for i := uint32(0); i < 76; i++ {
+                            r.ChanStat(i)
+                        }
+                    }
                 } else {
-                    fmt.Printf("300 empty buffer packets but no stat read.\n")
+                    fmt.Printf("GLIB%d %d empty buffer packets but no stat read.\n", r.hw.Num, nempty)
                 }
                 stats = timecontrol.GetReads(data)
                 if len(stats) > 0 {
-                    fmt.Printf("300 empty buffer packets. timing.csr.ctrl = 0x%08x\n", stats[0])
+                    fmt.Printf("GLIB%d %d empty buffer packets. timing.csr.ctrl = 0x%08x\n", r.hw.Num, nempty, stats[0])
                 } else {
-                    fmt.Printf("300 empty buffer packets but no timing.csr.ctrl read.\n")
+                    fmt.Printf("GLIB%d %d empty buffer packets but no timing.csr.ctrl read.\n", r.hw.Num, nempty)
                 }
                 stats = timecontrol.GetReads(data)
             }
@@ -1087,12 +1123,13 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     for i, reader := range c.readers {
         fmt.Printf("Setting up %dth reader.\n", i)
         reader.Reset()
-        reader.TriggerWindow(0xff, 0x7f)
         reader.Align()
+        reader.TriggerWindow(0x200, 0x32)
         reader.EnableReadoutChannels()
         go reader.Run(c.errs)
         time.Sleep(10 * time.Microsecond)
     }
+    time.Sleep(time.Second)
     if !c.internaltrigger {
         for _, reader := range c.readers {
             reader.Stat()
