@@ -72,6 +72,16 @@ func main() {
         if err != nil {
             panic(err)
         }
+        fmt.Printf("Parsed module %v. Registers:\n", mod)
+        for name, reg := range mod.Registers {
+            fmt.Printf("    %s: %v\n", name, reg)
+            for wordname, word := range reg.Words {
+                fmt.Printf("        word %s: %v\n", wordname, word)
+            }
+            for portname, port := range reg.Ports {
+                fmt.Printf("        port %s: %v\n", portname, port)
+            }
+        }
         mods = append(mods, mod)
     }
     runtime.GOMAXPROCS(6)

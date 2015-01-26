@@ -7,7 +7,7 @@
 		</word>
 	</register>
 	<register id="buffer" address="0x2" description="readout buffer" fwinfo="endpoint;width=1">
-		<word id="data" address="0x0" mode="port" size="0x1000"/>
+		<port id="data" address="0x0" mode="port" size="0x1000"/>
 		<word id="count" address="0x1"/>
 	</register>
 	<register id="csr" address="0x4" description="ctrl/status register" fwinfo="endpoint;width=2">
