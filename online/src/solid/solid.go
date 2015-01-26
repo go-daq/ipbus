@@ -259,6 +259,7 @@ func (r *Reader) StartSelfTriggers(thr uint32) {
         if err != nil {
             panic(err)
         }
+        fmt.Printf("GLIB%d: Set channel %d threshold = %d\n", r.hw.Num, ch, thr)
         p := ipbus.MakePacket(ipbus.Control)
         ctrl.MaskedWrite("chan_sel", ch, &p)
         chanctrl.MaskedWrite("t_thresh", thr, &p)
@@ -633,6 +634,14 @@ func (r Reader) Reset() {
     r.hw.Send(p, reply)
     rr = <-reply
     r.towrite <- rr
+    for _, ch := range r.channels {
+        p = ipbus.MakePacket(ipbus.Control)
+        csrctrl.MaskedWrite("chan_sel", ch, &p)
+        chanctrl.MaskedWrite("sync_en", 0, &p)
+        r.hw.Send(p, reply)
+        rr = <-reply
+        r.towrite <- rr
+    }
 }
 
 func (r Reader) Stat() {
@@ -658,11 +667,49 @@ func (r Reader) Stat() {
     r.towrite <- rr
 }
 
+func (r Reader) ChanStat(ch uint32) {
+    csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
+    chanstat := r.hw.Module.Registers["chan_csr"].Words["stat"]
+    p := ipbus.MakePacket(ipbus.Control)
+    csrctrl.MaskedWrite("chan_sel", ch, &p)
+    chanctrl.Read(&p)
+    chanstat.Read(&p)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    sync_en := chanctrl.GetMaskedReads("sync_en", rr)[0]
+    phase := chanctrl.GetMaskedReads("phase", rr)[0]
+    src_sel := chanctrl.GetMaskedReads("src_sel", rr)[0]
+    invert := chanctrl.GetMaskedReads("invert", rr)[0]
+    shift := chanctrl.GetMaskedReads("shift", rr)[0]
+    ro_en := chanctrl.GetMaskedReads("ro_en", rr)[0]
+    trig_en := chanctrl.GetMaskedReads("trig_en", rr)[0]
+    stop_mask := chanctrl.GetMaskedReads("stop_mask", rr)[0]
+    t_thresh := chanctrl.GetMaskedReads("t_thresh", rr)[0]
+    bp := chanstat.GetMaskedReads("bp", rr)[0]
+    err := chanstat.GetMaskedReads("err", rr)[0]
+    derand_rdy := chanstat.GetMaskedReads("derand_rdy", rr)[0]
+    derand_evt := chanstat.GetMaskedReads("derand_evt", rr)[0]
+    derand_aempty := chanstat.GetMaskedReads("derand_aempty", rr)[0]
+    derand_afull := chanstat.GetMaskedReads("derand_afull", rr)[0]
+    derand_empty := chanstat.GetMaskedReads("derand_empty", rr)[0]
+    derand_full := chanstat.GetMaskedReads("derand_full", rr)[0]
+    idel_ctr := chanstat.GetMaskedReads("idel_ctr", rr)[0]
+    fmt.Printf("GLIB%d channel %d stats:\n", r.hw.Num, ch)
+    fmt.Printf("    sync_en = %d, phase = %d, src_sel = %d, invert = %d\n", sync_en, phase, src_sel, invert)
+    fmt.Printf("    shift = %d, ro_en = %d, trig_en = %d, stop_mask = %d, t_thresh = %d\n", shift, ro_en, trig_en, stop_mask, t_thresh)
+    fmt.Printf("    bp = %d, err = %d, derand_rdy = %d, derand_evt = %d\n", bp, err, derand_rdy, derand_evt)
+    fmt.Printf("    derand_aempty = %d, derand_afull = %d, derand_empty = %d, derand_full = %d\n", derand_aempty, derand_afull, derand_empty, derand_full)
+    fmt.Printf("    idel_ctr = %d\n", idel_ctr)
+    r.towrite <- rr
+}
+
 func (r Reader) Align() {
     csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     timectrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
-    fmt.Printf("HW%d: aligning data channels.\n", )
+    fmt.Printf("HW%d: aligning data channels.\n", r.hw.Num)
     for _, ch := range r.cfg.DataChannels {
         p := ipbus.MakePacket(ipbus.Control)
         csrctrl.MaskedWrite("chan_sel", ch.Channel, &p)
@@ -680,6 +727,7 @@ func (r Reader) Align() {
         r.hw.Send(p, reply)
         rr := <-reply
         r.towrite <- rr
+        r.ChanStat(ch.Channel)
     }
 }
 
