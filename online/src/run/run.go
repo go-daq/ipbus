@@ -16,8 +16,10 @@ import (
 func main() {
     dir := flag.String("dir", ".", "output directory")
     name := flag.String("name", "testing", "part of output filename")
+    nuke := flag.Bool("nuke", false, "nuke FPGAs")
     duration := flag.Int("duration", 30, "Length o run [s]")
     threshold := flag.Int("threshold", -1, "Trigger threshold [ADC count above pedestal")
+    randrate := flag.Float64("randrate", -1.0, "Random trigger rate [Hz]")
     nchans := flag.Int("nchans", 76, "Number of channels per GLIB.")
     nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
     store := flag.String("store", "", "Long term storage location.")
@@ -67,7 +69,12 @@ func main() {
     //defer cleanexit(e)
     modnames := strings.Split(*glibs, ",")
     mods := []glibxml.Module{}
+    internaltrigger := false
     for _, modname := range modnames {
+        if modname == "GLIB6" {
+            fmt.Printf("GLIB6 in run, using internal triggers.\n")
+            internaltrigger = true
+        }
         mod, err := glibxml.Parse(modname, "c_triggered.xml")
         if err != nil {
             panic(err)
@@ -86,10 +93,12 @@ func main() {
     }
     runtime.GOMAXPROCS(6)
     fmt.Println("Solid's SM1 online DAQ software!")
-    internaltrigger := false
     control := solid.New(*dir, *store, channels, &exit, internaltrigger)
     for _, mod := range mods {
         control.AddFPGA(mod)
+    }
+    if *nuke {
+        control.Nuke()
     }
     errp := control.Start()
     if errp.Err != nil {
@@ -104,12 +113,12 @@ func main() {
         fmt.Printf("Making %dth run.\n", irun)
         fn := "triggered_"
         if *threshold < 0 {
-            fn += "random_"
+            fn += fmt.Sprintf("random%0.3fHz_", *randrate)
         } else {
             fn += fmt.Sprintf("thr%d_", *threshold)
         }
         fn += *name
-        r, err := data.NewRun(uint32(irun), fn, dt, *threshold)
+        r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *randrate)
         if err != nil {
             panic(err)
         }
