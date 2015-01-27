@@ -448,6 +448,9 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                         for i := uint32(0); i < 76; i++ {
                             r.ChanStat(i)
                         }
+                        for i := uint32(0x80); i < 0x8a; i++ {
+                            r.ChanStat(i)
+                        }
                     }
                 } else {
                     fmt.Printf("GLIB%d %d empty buffer packets but no stat read.\n", r.hw.Num, nempty)
