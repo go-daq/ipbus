@@ -64,14 +64,14 @@
 			<mask id="seq_len" mask="0xf0"/>
 		</word>
 		<word id="stat" address="0x1">
-            <mask id="stat_0.bp" mask="0x1"/>
-            <mask id="stat_0.err" mask="0x2"/>
-            <mask id="stat_0.derand_rdy" mask="0x4"/>
-            <mask id="stat_0.derand_evt" mask="0x8"/>
-            <mask id="stat_0.derand_aempty" mask="0x10"/>
-            <mask id="stat_0.derand_afull" mask="0x20"/>
-            <mask id="stat_0.derand_empty" mask="0x40"/>
-            <mask id="stat_0.derand_full" mask="0x80"/>
+            <mask id="stat0.bp" mask="0x1"/>
+            <mask id="stat0.err" mask="0x2"/>
+            <mask id="stat0.derand_rdy" mask="0x4"/>
+            <mask id="stat0.derand_evt" mask="0x8"/>
+            <mask id="stat0.derand_aempty" mask="0x10"/>
+            <mask id="stat0.derand_afull" mask="0x20"/>
+            <mask id="stat0.derand_empty" mask="0x40"/>
+            <mask id="stat0.derand_full" mask="0x80"/>
             <mask id="stat1.bp" mask="0x100"/>
             <mask id="stat1.err" mask="0x200"/>
             <mask id="stat1.derand_rdy" mask="0x400"/>

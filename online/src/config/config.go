@@ -71,8 +71,7 @@ func NewGLIB(module int, alignmentfn, pedspafn, maskfn string) Glib {
         }
         chans = append(chans, dc)
     }
-    triggers := []uint32{0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88,
-                         0x89}
+    triggers := []uint32{0x90, 0x91}
     g := Glib{Module: module, DataChannels: chans, TriggerChannels: triggers}
     return g
 }

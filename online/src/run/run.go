@@ -93,12 +93,9 @@ func main() {
     }
     runtime.GOMAXPROCS(6)
     fmt.Println("Solid's SM1 online DAQ software!")
-    control := solid.New(*dir, *store, channels, &exit, internaltrigger)
+    control := solid.New(*dir, *store, channels, &exit, internaltrigger, *nuke)
     for _, mod := range mods {
         control.AddFPGA(mod)
-    }
-    if *nuke {
-        control.Nuke()
     }
     errp := control.Start()
     if errp.Err != nil {
