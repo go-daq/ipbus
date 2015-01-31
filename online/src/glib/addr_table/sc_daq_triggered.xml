@@ -29,7 +29,8 @@
 			<mask id="clk_lock" mask="0x1"/>
 			<mask id="clk_stop" mask="0x2"/>
 			<mask id="idelctrl_rdy" mask="0x4"/>
-			<mask id="ro_stop" mask="0x8"/>			
+			<mask id="ro_stop" mask="0x30"/>
+			<mask id="buf_debug" mask="0xffff0000"/>
 		</word>
 	</register>
 	<register id="chan_csr" address="0x8" description="channel ctrl" fwinfo="endpoint;width=1">
@@ -59,9 +60,27 @@
 	<module id="timing" address="0x10" module="file://sc_timing_triggered.xml"/>
 	<register id="trig" address="0x20" description="trigger csr" fwinfo="endpoint;width=1">
 		<word id="ctrl" address="0x0">
-			<mask id="clr" mask="0x1"/>
+			<mask id="en_coinc" mask="0x1"/>
+			<mask id="seq_len" mask="0xf0"/>
 		</word>
-		<word id="stat" address="0x1"/>
+		<word id="stat" address="0x1">
+            <mask id="stat0.bp" mask="0x1"/>
+            <mask id="stat0.err" mask="0x2"/>
+            <mask id="stat0.derand_rdy" mask="0x4"/>
+            <mask id="stat0.derand_evt" mask="0x8"/>
+            <mask id="stat0.derand_aempty" mask="0x10"/>
+            <mask id="stat0.derand_afull" mask="0x20"/>
+            <mask id="stat0.derand_empty" mask="0x40"/>
+            <mask id="stat0.derand_full" mask="0x80"/>
+            <mask id="stat1.bp" mask="0x100"/>
+            <mask id="stat1.err" mask="0x200"/>
+            <mask id="stat1.derand_rdy" mask="0x400"/>
+            <mask id="stat1.derand_evt" mask="0x800"/>
+            <mask id="stat1.derand_aempty" mask="0x1000"/>
+            <mask id="stat1.derand_afull" mask="0x2000"/>
+            <mask id="stat1.derand_empty" mask="0x4000"/>
+            <mask id="stat1.derand_full" mask="0x8000"/>
+		</word>
 	</register>
 	<register id="sysmon" address="0x400" mode="block" size="0x400" description="sysmon access" fwinfo="endpoint;width=9"/>
 </module>
