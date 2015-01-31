@@ -461,9 +461,6 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                         for i := uint32(0); i < 76; i++ {
                             r.ChanStat(i)
                         }
-                        for i := uint32(0x80); i < 0x8a; i++ {
-                            r.ChanStat(i)
-                        }
                     }
                 } else {
                     fmt.Printf("GLIB%d %d empty buffer packets but no stat read.\n", r.hw.Num, nempty)
@@ -1313,7 +1310,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
                 go reader.Run(c.errs)
             }
             c.clock.RandomRate(r.Rate)
-            //c.clock.StartTriggers()
+            c.clock.StartTriggers()
         } else {
             for i, reader := range c.readers {
                 fmt.Printf("Internal triggers: Start triggers for reader %d.\n", i)
