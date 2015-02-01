@@ -87,12 +87,13 @@ type Run struct{
     Duration time.Duration
     Commit Commit
     Threshold int
+    Coincidence bool
     Rate float64
 }
 
-func NewRun(n uint32, name string, dt time.Duration, threshold int, randomrate float64) (Run, error) {
+func NewRun(n uint32, name string, dt time.Duration, threshold int, randomrate float64, coincidence bool) (Run, error) {
     now := time.Now()
-    r := Run{Num: n, Name: name, Start: now, End: now.Add(dt), Duration: dt, Threshold: threshold, Rate: randomrate}
+    r := Run{Num: n, Name: name, Start: now, End: now.Add(dt), Duration: dt, Threshold: threshold, Rate: randomrate, Coincidence: coincidence}
     c, err := getcommit()
     if err != nil {
         return r, err

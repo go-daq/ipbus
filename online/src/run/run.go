@@ -17,6 +17,7 @@ func main() {
     dir := flag.String("dir", ".", "output directory")
     name := flag.String("name", "testing", "part of output filename")
     nuke := flag.Bool("nuke", false, "nuke FPGAs")
+    coincidence := flag.Bool("coincidence", false, "require vertical/horizonatal coincidence to trigger.")
     duration := flag.Int("duration", 30, "Length o run [s]")
     threshold := flag.Int("threshold", -1, "Trigger threshold [ADC count above pedestal")
     randrate := flag.Float64("randrate", -1.0, "Random trigger rate [Hz]")
@@ -115,7 +116,7 @@ func main() {
             fn += fmt.Sprintf("thr%d_", *threshold)
         }
         fn += *name
-        r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *randrate)
+        r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *randrate, *coincidence)
         if err != nil {
             panic(err)
         }
