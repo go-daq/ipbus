@@ -275,6 +275,28 @@ func (r *Reader) EnableReadoutChannels() {
     */
 }
 
+func (r *Reader) SetCoincidenceMode(mode bool) {
+    if mode {
+        fmt.Printf("GLIB%d enabling coincidence trigger.", r.hw.Num)
+    } else {
+        fmt.Printf("GLIB%d disabling coincidence trigger.", r.hw.Num)
+    }
+    trigctrl, ok := r.hw.Module.Registers["trig"].Words["ctrl"]
+    if !ok {
+        panic(fmt.Errorf("Did not find trig.ctrl word."))
+    }
+    p := ipbus.MakePacket(ipbus.Control)
+    val := uint32(0)
+    if mode {
+        val = 1
+    }
+    trigctrl.MaskedWrite("en_coinc", val, &p)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
+
 func (r *Reader) StartSelfTriggers(thr uint32) {
     r.cfg.SetThresholds(thr)
     reply := make(chan data.ReqResp)
@@ -1284,6 +1306,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         tick := time.NewTicker(r.Duration)
         for _, reader := range c.readers {
             go reader.Run(c.errs)
+            reader.SetCoincidenceMode(r.Coincidence)
             reader.StartSelfTriggers(uint32(r.Threshold))
             reader.Clear()
         }
