@@ -447,7 +447,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         case data := <-r.read:
             if nempty == 300 {
                 fmt.Printf("300 empty reads, sending a software trigger.\n")
-                r.SendSoftwareTriggers(1)
+                //r.SendSoftwareTriggers(1)
             }
             if nempty > 0 && (nempty % 500 == 0) {
                 stats := stat.GetReads(data)
@@ -1279,12 +1279,30 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     quit := false
     err := data.MakeErrPack(error(nil))
     if r.Threshold >= 0 {
+        randomrate := 1.0
         fmt.Printf("Running self triggers for %v.\n", r.Duration)
         tick := time.NewTicker(r.Duration)
         for _, reader := range c.readers {
             go reader.Run(c.errs)
             reader.StartSelfTriggers(uint32(r.Threshold))
             reader.Clear()
+        }
+        if !c.internaltrigger {
+            fmt.Printf("External triggers, starting from trigger board.\n")
+            for _, reader := range c.readers {
+                reader.Clear()
+                go reader.Run(c.errs)
+            }
+            c.clock.RandomRate(randomrate)
+            c.clock.StartTriggers()
+        } else {
+            for i, reader := range c.readers {
+                fmt.Printf("Internal triggers: Start triggers for reader %d.\n", i)
+                reader.Clear()
+                go reader.Run(c.errs)
+                reader.RandomTriggerRate(randomrate)
+                reader.StartRandomTriggers()
+            }
         }
         select {
         case <-tick.C:
@@ -1310,7 +1328,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
                 go reader.Run(c.errs)
             }
             c.clock.RandomRate(r.Rate)
-            //c.clock.StartTriggers()
+            c.clock.StartTriggers()
         } else {
             for i, reader := range c.readers {
                 fmt.Printf("Internal triggers: Start triggers for reader %d.\n", i)
