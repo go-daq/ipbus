@@ -318,7 +318,7 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 	}
 	rr.Sent = time.Now()
 	if p.Type == ipbus.Resend {
-		fmt.Printf("HW%d: Sent resend request at %v\n", h.Num, rr.Sent)
+        fmt.Printf("HW%d: Sent resend request at %v: 0x%x\n", h.Num, rr.Sent, rr.Bytes[:rr.RespIndex])
 	}
 	if verbose {
 		fmt.Printf("HW%d: sent %v\n", h.Num, p)
