@@ -333,7 +333,7 @@ type PackHeader struct {
 }
 
 func (p PackHeader) String() string {
-    return fmt.Sprintf("v = %d, id = 0x%x, type = %d, %d transactions.", p.Version, p.ID, p.Type, len(p.Trans))
+    return fmt.Sprintf("v = %d, id = 0x%x, type = %d, %d transactions: %v.", p.Version, p.ID, p.Type, len(p.Trans), p.Trans)
 }
 
 func (p PackHeader) Encode() []byte {
@@ -401,7 +401,7 @@ func (p *PackHeader) Parse(data []byte, loc int, parsetransactions bool) error {
                     loc += 8
                 }
             } else {
-                return fmt.Errorf("Transaction code %x not implimented.", th.Code)
+                return fmt.Errorf("Transaction code %x not implimented.\n\n%v\n\n%x", th.Code, p, data)
             }
         }
     }
@@ -416,6 +416,10 @@ type TranHeader struct {
 	Words   uint8
 	Type    TypeID
 	Code    InfoCode
+}
+
+func (t TranHeader) String() string {
+    return fmt.Sprintf("loc: %d, v = %d, id = %d, %d words, type = %d, infocode = %v", t.Loc, t.Version, t.ID, t.Words, t.Type, t.Code)
 }
 
 func (t *TranHeader) Parse(data []byte, loc int) error {

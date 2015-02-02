@@ -468,7 +468,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // sleep for period based upon Number of words ready to read
         case data := <-r.read:
             if nempty == 300 {
-                fmt.Printf("300 empty reads, sending a software trigger.\n")
+                //fmt.Printf("300 empty reads, sending a software trigger.\n")
                 //r.SendSoftwareTriggers(1)
             }
             if nempty > 0 && (nempty % 500 == 0) {
@@ -498,21 +498,23 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             if len(ro_stops) > 0 {
                 ro_stop := stat.GetMaskedReads("ro_stop", data)[0]
                 if ro_stop != readout_stopped {
-                    fmt.Printf("ro_stop: 0x%x -> 0x%x\n", readout_stopped, ro_stop)
+                    fmt.Printf("GLIB%d: ro_stop 0x%x -> 0x%x\n", r.hw.Num, readout_stopped, ro_stop)
+                    /*
                     if ro_stop > 0 {
                         r.TrigStat()
                     }
+                    */
                 }
                 readout_stopped = ro_stop
             } else {
-                fmt.Println("Didn't get any read of csr.stat.ro_stop.")
+                fmt.Printf("GLIB%d: Didn't get any read of csr.stat.ro_stop.\n", r.hw.Num)
             }
             lengths := buffersize.GetReads(data)
             n := len(lengths)
             if n > 0 {
                 newlen := lengths[n - 1][0]
-                if newlen * bufferlen == 0 && newlen + bufferlen > 0 || readout_stopped > 0 {
-                    fmt.Printf("buffer.count: %d -> %d\n", bufferlen, newlen)
+                if newlen == 0 && readout_stopped > 0 {
+                    fmt.Printf("GLIB%d: buffer.count: %d -> %d\n", r.hw.Num, bufferlen, newlen)
                 }
                 bufferlen = newlen
             } else {
@@ -1301,28 +1303,24 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     quit := false
     err := data.MakeErrPack(error(nil))
     if r.Threshold >= 0 {
-        randomrate := 1.0
+        randomrate := 0.1
         fmt.Printf("Running self triggers for %v.\n", r.Duration)
         tick := time.NewTicker(r.Duration)
         for _, reader := range c.readers {
+            reader.Clear()
             go reader.Run(c.errs)
+        }
+        for _, reader := range c.readers {
             reader.SetCoincidenceMode(r.Coincidence)
             reader.StartSelfTriggers(uint32(r.Threshold))
-            reader.Clear()
         }
         if !c.internaltrigger {
             fmt.Printf("External triggers, starting from trigger board.\n")
-            for _, reader := range c.readers {
-                reader.Clear()
-                go reader.Run(c.errs)
-            }
             c.clock.RandomRate(randomrate)
             c.clock.StartTriggers()
         } else {
             for i, reader := range c.readers {
                 fmt.Printf("Internal triggers: Start triggers for reader %d.\n", i)
-                reader.Clear()
-                go reader.Run(c.errs)
                 reader.RandomTriggerRate(randomrate)
                 reader.StartRandomTriggers()
             }

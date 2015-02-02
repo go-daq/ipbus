@@ -115,6 +115,11 @@ func main() {
         } else {
             fn += fmt.Sprintf("thr%d_", *threshold)
         }
+        if *coincidence {
+            fn += "coinc_"
+        } else {
+            fn += "nocoinc_"
+        }
         fn += *name
         r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *randrate, *coincidence)
         if err != nil {
