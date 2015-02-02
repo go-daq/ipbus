@@ -150,7 +150,7 @@ func (clk *ClockBoard) SendTrigger() {
 type Reader struct{
     hw *hw.HW
     cfg config.Glib
-    Stop chan bool
+    Stop chan chan bool
     towrite, read chan data.ReqResp
     period, dt time.Duration
     channels, triggerchannels []uint32
@@ -163,7 +163,7 @@ func NewReader(hw *hw.HW, cfg config.Glib, towrite chan data.ReqResp, period,
     triggerchannels := []uint32{0x90, 0x91}
     r := Reader{hw: hw, cfg: cfg, towrite: towrite, period: period, dt: dt,
                 channels: channels, triggerchannels: triggerchannels, exit: exit}
-    r.Stop = make(chan bool)
+    r.Stop = make(chan chan bool)
     return &r
 }
 
@@ -461,8 +461,10 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         r.hw.Send(p, r.read)
         select {
         // Signal to stop
-        case <- r.Stop:
+        case stopped := <-r.Stop:
             running = false
+            // Fudge for now, should rally wait until stuff is emptied before stopping
+            stopped <- true
             break
         // Get replies from the read request, send data to writer's channel and
         // sleep for period based upon Number of words ready to read
@@ -649,6 +651,23 @@ func (r Reader) Nuke() {
     time.Sleep(3 * time.Second)
 }
 
+func (r Reader) ResetBuffer() {
+    timingcsrctrl, ok := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    if !ok {
+        panic(fmt.Errorf("timing.csr.ctrl word not found."))
+    }
+    fmt.Printf("Resetting timing buffers.\n")
+    p := ipbus.MakePacket(ipbus.Control)
+    timingcsrctrl.MaskedWrite("buf_rst", 1, &p)
+    timingcsrctrl.MaskedWrite("buf_rst", 0, &p)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+    time.Sleep(time.Second)
+
+}
+
 func (r Reader) Reset(nuke bool) {
     if nuke {
         r.Nuke()
@@ -719,6 +738,8 @@ func (r Reader) Reset(nuke bool) {
     r.hw.Send(p, reply)
     rr = <-reply
     r.towrite <- rr
+    time.Sleep(time.Second)
+    r.TrigStat()
     // Reset delays
     for _, ch := range r.channels {
         p = ipbus.MakePacket(ipbus.Control)
@@ -728,14 +749,6 @@ func (r Reader) Reset(nuke bool) {
         rr = <-reply
         r.towrite <- rr
     }
-    fmt.Printf("Resetting timing buffers.\n")
-    p = ipbus.MakePacket(ipbus.Control)
-    timingcsrctrl.MaskedWrite("buf_rst", 1, &p)
-    timingcsrctrl.MaskedWrite("buf_rst", 0, &p)
-    r.hw.Send(p, reply)
-    rr = <-reply
-    r.towrite <- rr
-    time.Sleep(time.Second)
     fmt.Printf("Resetting delay control.\n")
     p = ipbus.MakePacket(ipbus.Control)
     timingcsrctrl.MaskedWrite("idelctrl_rst", 1, &p)
@@ -746,28 +759,6 @@ func (r Reader) Reset(nuke bool) {
     r.towrite <- rr
     time.Sleep(time.Second)
     // Reset timing buffers (enable sync on all channels first)
-    for _, ch := range r.channels {
-        p = ipbus.MakePacket(ipbus.Control)
-        csrctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("sync_en", 0, &p)
-        r.hw.Send(p, reply)
-        rr = <-reply
-        r.towrite <- rr
-    }
-    // Select external clock and external synchronisation
-    fmt.Printf("Selecting external clock and enabling synchronisation.\n")
-    p = ipbus.MakePacket(ipbus.Control)
-    if r.hw.Num == 6 {
-        fmt.Printf("GLIB6: using internal clock.\n")
-        csrctrl.MaskedWrite("clk_sel", 0, &p)
-        fmt.Printf("GLIB6 has no external clock to synchronise with.\n")
-    } else {
-        csrctrl.MaskedWrite("clk_sel", 1, &p)
-        timingcsrctrl.MaskedWrite("sync_en", 1, &p)
-    }
-    r.hw.Send(p, reply)
-    rr = <-reply
-    r.towrite <- rr
     fmt.Printf("GLIB%d, setting csr.ctrl.board_id = %d\n", r.hw.Num, r.hw.Num)
     p = ipbus.MakePacket(ipbus.Control)
     csrctrl.MaskedWrite("board_id", uint32(r.hw.Num), &p)
@@ -776,6 +767,32 @@ func (r Reader) Reset(nuke bool) {
     r.towrite <- rr
 }
 
+func (r Reader) PrepareSynchronisation() {
+    csrctrl, ok := r.hw.Module.Registers["csr"].Words["ctrl"]
+    if !ok {
+        panic(fmt.Errorf("csr.ctrl word not found."))
+    }
+    timingcsrctrl, ok := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    if !ok {
+        panic(fmt.Errorf("timing.csr.ctrl word not found."))
+    }
+    // Select external clock and external synchronisation
+    fmt.Printf("Selecting external clock and enabling synchronisation.\n")
+    p := ipbus.MakePacket(ipbus.Control)
+    if r.hw.Num == 6 {
+        fmt.Printf("GLIB6: using internal clock.\n")
+        csrctrl.MaskedWrite("clk_sel", 0, &p)
+        timingcsrctrl.MaskedWrite("sync_en", 0, &p)
+        fmt.Printf("GLIB6 has no external clock to synchronise with.\n")
+    } else {
+        csrctrl.MaskedWrite("clk_sel", 1, &p)
+        timingcsrctrl.MaskedWrite("sync_en", 1, &p)
+    }
+    reply := make(chan data.ReqResp)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
 func (r Reader) Clear() {
     fmt.Printf("Clearing buffer\n")
     timingcsrctrl, ok := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
@@ -892,10 +909,21 @@ func (r Reader) ChanStat(ch uint32) {
 }
 
 func (r Reader) Align() {
+    // Disable synchronous control on all channels, set delays on each 
+    // channel then reenable syncrhonous control on all channels.
     csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     timectrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
     fmt.Printf("HW%d: aligning data channels.\n", r.hw.Num)
+    for ich := uint32(0); ich < 76; ich++ {
+        p := ipbus.MakePacket(ipbus.Control)
+        csrctrl.MaskedWrite("chan_sel", ich, &p)
+        chanctrl.MaskedWrite("sync_en", 0, &p)
+        reply := make(chan data.ReqResp)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        r.towrite <- rr
+    }
     for _, ch := range r.cfg.DataChannels {
         p := ipbus.MakePacket(ipbus.Control)
         csrctrl.MaskedWrite("chan_sel", ch.Channel, &p)
@@ -914,6 +942,15 @@ func (r Reader) Align() {
         rr := <-reply
         r.towrite <- rr
         r.ChanStat(ch.Channel)
+    }
+    for ich := uint32(0); ich < 76; ich++ {
+        p := ipbus.MakePacket(ipbus.Control)
+        csrctrl.MaskedWrite("chan_sel", ich, &p)
+        chanctrl.MaskedWrite("sync_en", 1, &p)
+        reply := make(chan data.ReqResp)
+        r.hw.Send(p, reply)
+        rr := <-reply
+        r.towrite <- rr
     }
 }
 
@@ -1272,6 +1309,163 @@ func (c Control) Nuke() {
 }
 
 func (c Control) Run(r data.Run) (bool, data.ErrPack) {
+    /*
+    Dave's instructions:
+    Startup:
+
+    - Make sure no triggers are being issued from the clock board
+    - Use csr.ctrl.soft_rst to bring the registers to a known state
+    - Check the clock is locked with csr.stat.clk_lock
+    - Reset the sampling logic with timing.csr.ctrl.rst
+    - Check that the channel derandomiser contents are all empty
+    - Set up all the alignments, etc, and any other per-channel settings
+    - Enable synchronous control on all channels of interest
+    - Make sure the right window size, etc, is set up in csr.window_ctrl
+
+    Then either for single-board mode:
+
+    - Hit timing.csr.ctrl.buf_rst to align the buffers
+    - Check the error status of all channels to make sure it's all locked
+
+    or for multi-board mode:
+
+    - Send a sync pulse from the clock board
+    - Check the error status of all channels to make sure it's all locked
+
+    Then:
+
+    - Start the event readout loop
+    - Start randoms if required
+    - Program the trigger thresholds
+    - Go through and enable trigger (not readout) for all channels of interest
+    - Make sure readout is disabled for all channels not of interest (e.g. clock channels)
+    - Enable readout for the channels of interest
+    - Data should be flowing
+
+    To shut down:
+
+    - Disable readout on all channels.
+    - Disable any source of random triggers
+    - Read out the remaining buffer contents as per normal, until there's nothing left
+    - Check that the channel derandomiser contents are all empty
+    */
+    // Make sure the clock board is not sending out triggers
+    if !c.internaltrigger {
+        fmt.Printf("Stopping any triggers from the clock board.")
+        c.clock.Reset()
+        c.clock.StopTriggers()
+    }
+    // Reset GLIBs
+    fmt.Printf("Resetting data readers\n")
+    for _, reader := range c.readers {
+        reader.Reset(c.nuke)
+        reader.TrigStat()
+        reader.Align()
+        reader.TriggerWindow(0xff, 0x2f)
+        reader.SetCoincidenceMode(r.Coincidence)
+    }
+    // Synchronise GLIBs or reset buffer
+    for _, reader := range c.readers {
+        reader.PrepareSynchronisation()
+    }
+    if !c.internaltrigger {
+        c.clock.SendTrigger()
+    } else {
+        for _, reader := range c.readers {
+            reader.ResetBuffer()
+        }
+    }
+    // Check everything is locked
+    fmt.Printf("Checking that all GLIBs are correclty configured.\n")
+    for _, reader := range c.readers {
+        reader.TrigStat()
+        for i := uint32(0); i < 76; i++ {
+            reader.ChanStat(i)
+        }
+    }
+    // Start readout 
+    fmt.Printf("Starting readout routines.\n")
+    for _, reader := range c.readers {
+        go reader.Run(c.errs)
+    }
+
+    // Start random triggers
+    fmt.Printf("Starting random triggers.\n")
+    randrate := r.Rate
+    if r.Threshold > 0 {
+        randrate = 0.1
+    }
+    if !c.internaltrigger {
+        c.clock.RandomRate(randrate)
+        c.clock.StartTriggers()
+    } else {
+        for _, reader := range c.readers {
+            reader.RandomTriggerRate(randrate)
+            reader.StartRandomTriggers()
+        }
+    }
+    // Start threshold triggers
+    if r.Threshold > 0 {
+        fmt.Printf("Starting threshold triggers.\n")
+        for _, reader := range c.readers {
+            reader.StartSelfTriggers(uint32(r.Threshold))
+        }
+    }
+    // Enable readout
+    fmt.Printf("Starting readout.\n")
+    for _, reader := range c.readers {
+        reader.EnableReadoutChannels()
+    }
+    // Start ticker
+    fmt.Printf("Running for %v.\n", r.Duration)
+    tick := time.NewTicker(r.Duration)
+    quit := false
+    err := data.MakeErrPack(error(nil))
+    select {
+    case <-tick.C:
+        fmt.Printf("Stopped due to ticker.\n")
+    case err = <-c.errs:
+        fmt.Printf("Control.Run() stopped due to error channel\n")
+        quit = true
+    case <-c.signals:
+        fmt.Printf("Control.Run() stopped by ctrl+c\n")
+        quit = true
+    }
+    // Disable readout on all channels
+    for _, reader := range c.readers {
+        reader.DisableReadout()
+    }
+    // Stop random triggers
+    if !c.internaltrigger {
+        c.clock.StopTriggers()
+    } else {
+        for _, reader := range c.readers {
+            reader.StopRandomTriggers()
+        }
+    }
+    // Send signal to stop readout loop when empty
+    stopped := make(chan bool, len(c.readers))
+    for _, reader := range c.readers {
+        reader.Stop <- stopped
+    }
+    // Wait for readers to have stopped
+    nstopped := 0
+    for nstopped < len(c.readers) {
+        <-stopped
+        nstopped += 1
+    }
+
+    // Check derandomisers are empty
+    for _, reader := range c.readers {
+        reader.TrigStat()
+
+    }
+    return quit, err
+
+
+
+
+    /* BELOW OLD
     // Tell the writer to start a new file
     fmt.Printf("Starting run for %v.\n", r.Duration)
     c.runtowriter <- r
@@ -1389,6 +1583,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         r.Stop <- true
     }
     return quit, err
+    */
 }
 
 // Cleanly stop the online DAQ software
