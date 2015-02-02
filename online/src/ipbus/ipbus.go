@@ -62,9 +62,14 @@ func (t Transaction) String() string {
 }
 
 func (t Transaction) Encode() ([]byte, error) {
+	header := uint32(t.Code)
+	header |= (uint32(t.Type) << 4)
+	header |= (uint32(t.Words) << 8)
+	header |= (uint32(t.ID) << 16)
+	header |= (uint32(t.Version) << 28)
 	data := make([]byte, 0, len(t.Body)+4)
 	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.BigEndian, t.header); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, header); err != nil {
 		return data, err
 	}
 	data = append(data, buf.Bytes()...)
