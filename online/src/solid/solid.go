@@ -465,7 +465,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // Signal to stop
         case stopped = <-r.Stop:
             emptying = true
-            running = false
+            //running = false
             // Fudge for now, should rally wait until stuff is emptied before stopping
         // Get replies from the read request, send data to writer's channel and
         // sleep for period based upon Number of words ready to read
@@ -837,33 +837,42 @@ func (r Reader) Stat() {
 }
 
 func (r Reader) CheckEmpty() (empty bool) {
+    r.TrigStat()
+    lastchecked := -2
     fmt.Printf("GLIB%d: checking if readout empty\n", r.hw.Num)
-    defer fmt.Printf("GLIB%d: empty = %t\n", r.hw.Num, empty)
-    stat := r.hw.Module.Registers["csr"].Words["stat"]
+    stat0 := r.hw.Module.Registers["trig"].Words["stat_0"]
+    stat1 := r.hw.Module.Registers["trig"].Words["stat_1"]
     chanstat := r.hw.Module.Registers["chan_csr"].Words["stat"]
     csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     p := ipbus.MakePacket(ipbus.Control)
-    stat.Read(&p)
+    stat0.Read(&p)
+    stat1.Read(&p)
     reply := make(chan data.ReqResp)
     r.hw.Send(p, reply)
     rr := <-reply
-    empty = stat.GetMaskedReads("stat0.derand_empty", rr)[0] == 1
+    empty = stat0.GetMaskedReads("derand_empty", rr)[0] == 1
     if !empty {
         return empty
     }
-    empty = stat.GetMaskedReads("stat1.derand_empty", rr)[0] == 1
+    lastchecked += 1
+    fmt.Printf("stat0 has derand_empty = 1, lastchecked = %d\n", lastchecked)
+    empty = stat1.GetMaskedReads("derand_empty", rr)[0] == 1
     if !empty {
         return empty
     }
+    fmt.Printf("stat1 has derand_empty = 1\n")
+    lastchecked += 1
     for i := uint32(0); i < 75; i++ {
         p = ipbus.MakePacket(ipbus.Control)
         csrctrl.MaskedWrite("chan_sel", i, &p)
         chanstat.Read(&p)
         r.hw.Send(p, reply)
+        rr = <-reply
         empty = chanstat.GetMaskedReads("derand_empty", rr)[0] == 1
         if !empty {
             return empty
         }
+        lastchecked += 1
     }
     empty = true
     return
@@ -871,9 +880,11 @@ func (r Reader) CheckEmpty() (empty bool) {
 
 func (r Reader) TrigStat() {
     csrstat := r.hw.Module.Registers["csr"].Words["stat"]
-    stat := r.hw.Module.Registers["trig"].Words["stat"]
+    stat0 := r.hw.Module.Registers["trig"].Words["stat_0"]
+    stat1 := r.hw.Module.Registers["trig"].Words["stat_1"]
     p := ipbus.MakePacket(ipbus.Control)
-    stat.Read(&p)
+    stat1.Read(&p)
+    stat0.Read(&p)
     csrstat.Read(&p)
     reply := make(chan data.ReqResp)
     r.hw.Send(p, reply)
@@ -883,25 +894,25 @@ func (r Reader) TrigStat() {
     ro_stop := csrstat.GetMaskedReads("ro_stop", rr)[0]
     buf_debug := csrstat.GetMaskedReads("buf_debug", rr)[0]
     fmt.Printf("csr.stat: clk_lock = %d, clk_stop = %d, ro_stop = 0x%x, buf_debug = 0x%x\n", clk_lock, clk_stop, ro_stop, buf_debug)
-    bp0 := stat.GetMaskedReads("stat0.bp", rr)[0]
-    err0 := stat.GetMaskedReads("stat0.err", rr)[0]
-    derand_rdy0 := stat.GetMaskedReads("stat0.derand_rdy", rr)[0]
-    derand_evt0 := stat.GetMaskedReads("stat0.derand_evt", rr)[0]
-    derand_aempty0 := stat.GetMaskedReads("stat0.derand_aempty", rr)[0]
-    derand_afull0 := stat.GetMaskedReads("stat0.derand_afull", rr)[0]
-    derand_empty0 := stat.GetMaskedReads("stat0.derand_empty", rr)[0]
-    derand_full0 := stat.GetMaskedReads("stat0.derand_full", rr)[0]
+    bp0 := stat0.GetMaskedReads("bp", rr)[0]
+    err0 := stat0.GetMaskedReads("err", rr)[0]
+    derand_rdy0 := stat0.GetMaskedReads("derand_rdy", rr)[0]
+    derand_evt0 := stat0.GetMaskedReads("derand_evt", rr)[0]
+    derand_aempty0 := stat0.GetMaskedReads("derand_aempty", rr)[0]
+    derand_afull0 := stat0.GetMaskedReads("derand_afull", rr)[0]
+    derand_empty0 := stat0.GetMaskedReads("derand_empty", rr)[0]
+    derand_full0 := stat0.GetMaskedReads("derand_full", rr)[0]
     fmt.Printf("GLIB%d, DEIMOS%d stat:\n", r.hw.Num, 0)
     fmt.Printf("    bp = %d, err = %d, derand_rdy = %d, derand_evt = %d\n", bp0, err0, derand_rdy0, derand_evt0)
     fmt.Printf("    derand_aempty = %d, derand_afull = %d, derand_empty = %d, derand_full = %d\n", derand_aempty0, derand_afull0, derand_empty0, derand_full0)
-    bp1 := stat.GetMaskedReads("stat1.bp", rr)[0]
-    err1 := stat.GetMaskedReads("stat1.err", rr)[0]
-    derand_rdy1 := stat.GetMaskedReads("stat1.derand_rdy", rr)[0]
-    derand_evt1 := stat.GetMaskedReads("stat1.derand_evt", rr)[0]
-    derand_aempty1 := stat.GetMaskedReads("stat1.derand_aempty", rr)[0]
-    derand_afull1 := stat.GetMaskedReads("stat1.derand_afull", rr)[0]
-    derand_empty1 := stat.GetMaskedReads("stat1.derand_empty", rr)[0]
-    derand_full1 := stat.GetMaskedReads("stat1.derand_full", rr)[0]
+    bp1 := stat1.GetMaskedReads("bp", rr)[0]
+    err1 := stat1.GetMaskedReads("err", rr)[0]
+    derand_rdy1 := stat1.GetMaskedReads("derand_rdy", rr)[0]
+    derand_evt1 := stat1.GetMaskedReads("derand_evt", rr)[0]
+    derand_aempty1 := stat1.GetMaskedReads("derand_aempty", rr)[0]
+    derand_afull1 := stat1.GetMaskedReads("derand_afull", rr)[0]
+    derand_empty1 := stat1.GetMaskedReads("derand_empty", rr)[0]
+    derand_full1 := stat1.GetMaskedReads("derand_full", rr)[0]
     fmt.Printf("GLIB%d, DEIMOS%d stat:\n", r.hw.Num, 1)
     fmt.Printf("    bp = %d, err = %d, derand_rdy = %d, derand_evt = %d\n", bp1, err1, derand_rdy1, derand_evt1)
     fmt.Printf("    derand_aempty = %d, derand_afull = %d, derand_empty = %d, derand_full = %d\n", derand_aempty1, derand_afull1, derand_empty1, derand_full1)
@@ -1447,17 +1458,17 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
             reader.StartRandomTriggers()
         }
     }
+    // Enable readout
+    fmt.Printf("Starting readout.\n")
+    for _, reader := range c.readers {
+        reader.EnableReadoutChannels()
+    }
     // Start threshold triggers
     if r.Threshold > 0 {
         fmt.Printf("Starting threshold triggers.\n")
         for _, reader := range c.readers {
             reader.StartSelfTriggers(uint32(r.Threshold))
         }
-    }
-    // Enable readout
-    fmt.Printf("Starting readout.\n")
-    for _, reader := range c.readers {
-        reader.EnableReadoutChannels()
     }
     // Start ticker
     fmt.Printf("Running for %v.\n", r.Duration)

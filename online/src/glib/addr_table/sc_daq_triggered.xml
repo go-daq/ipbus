@@ -74,14 +74,14 @@
             <mask id="derand_full" mask="0x80"/>
         </word>
 		<word id="stat_1" address="0x3">
-            <mask id="bp" mask="0x100"/>
-            <mask id="err" mask="0x200"/>
-            <mask id="derand_rdy" mask="0x400"/>
-            <mask id="derand_evt" mask="0x800"/>
-            <mask id="derand_aempty" mask="0x1000"/>
-            <mask id="derand_afull" mask="0x2000"/>
-            <mask id="derand_empty" mask="0x4000"/>
-            <mask id="derand_full" mask="0x8000"/>
+            <mask id="bp" mask="0x1"/>
+            <mask id="err" mask="0x2"/>
+            <mask id="derand_rdy" mask="0x4"/>
+            <mask id="derand_evt" mask="0x8"/>
+            <mask id="derand_aempty" mask="0x10"/>
+            <mask id="derand_afull" mask="0x20"/>
+            <mask id="derand_empty" mask="0x40"/>
+            <mask id="derand_full" mask="0x80"/>
 		</word>
 	</register>
 	<register id="sysmon" address="0x400" mode="block" size="0x400" description="sysmon access" fwinfo="endpoint;width=9"/>
