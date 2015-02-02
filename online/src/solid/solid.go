@@ -435,6 +435,8 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     nempty := 0
     ndata := 0
     readout_stopped := uint32(7)
+    emptying := false
+    stopped := make(chan bool, 2)
     for running {
         // Read up to X words of data then read size
         p := ipbus.MakePacket(ipbus.Control)
@@ -461,11 +463,10 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         r.hw.Send(p, r.read)
         select {
         // Signal to stop
-        case stopped := <-r.Stop:
+        case stopped = <-r.Stop:
+            emptying = true
             running = false
             // Fudge for now, should rally wait until stuff is emptied before stopping
-            stopped <- true
-            break
         // Get replies from the read request, send data to writer's channel and
         // sleep for period based upon Number of words ready to read
         case data := <-r.read:
@@ -546,9 +547,13 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                 nempty = 0
                 //fmt.Printf("lengths = %v\n", lengths)
             }
+            if emptying && bufferlen == 0 {
+                running = !r.CheckEmpty()
+            }
         }
     }
     fmt.Printf("Reader finished.\n")
+    stopped <- true
 }
 
 func (r *Reader) ScopeModeRun(errs chan data.ErrPack) {
@@ -829,6 +834,39 @@ func (r Reader) Stat() {
         fmt.Printf("trig.stat: 0x%08x\n", stats[0])
     }
     r.towrite <- rr
+}
+
+func (r Reader) CheckEmpty() (empty bool) {
+    fmt.Printf("GLIB%d: checking if readout empty\n", r.hw.Num)
+    defer fmt.Printf("GLIB%d: empty = %t\n", r.hw.Num, empty)
+    stat := r.hw.Module.Registers["csr"].Words["stat"]
+    chanstat := r.hw.Module.Registers["chan_csr"].Words["stat"]
+    csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    p := ipbus.MakePacket(ipbus.Control)
+    stat.Read(&p)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    empty = stat.GetMaskedReads("stat0.derand_empty", rr)[0] == 1
+    if !empty {
+        return empty
+    }
+    empty = stat.GetMaskedReads("stat1.derand_empty", rr)[0] == 1
+    if !empty {
+        return empty
+    }
+    for i := uint32(0); i < 75; i++ {
+        p = ipbus.MakePacket(ipbus.Control)
+        csrctrl.MaskedWrite("chan_sel", i, &p)
+        chanstat.Read(&p)
+        r.hw.Send(p, reply)
+        empty = chanstat.GetMaskedReads("derand_empty", rr)[0] == 1
+        if !empty {
+            return empty
+        }
+    }
+    empty = true
+    return
 }
 
 func (r Reader) TrigStat() {
@@ -1356,6 +1394,10 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         c.clock.StopTriggers()
     }
     // Reset GLIBs
+    fmt.Printf("Starting run for %v.\n", r.Duration)
+    c.runtowriter <- r
+    time.Sleep(time.Second)
+    c.startacquisition()
     fmt.Printf("Resetting data readers\n")
     for _, reader := range c.readers {
         reader.Reset(c.nuke)
@@ -1375,6 +1417,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
             reader.ResetBuffer()
         }
     }
+    time.Sleep(time.Second)
     // Check everything is locked
     fmt.Printf("Checking that all GLIBs are correclty configured.\n")
     for _, reader := range c.readers {
@@ -1460,6 +1503,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         reader.TrigStat()
 
     }
+    c.stopacquisition()
     return quit, err
 
 
