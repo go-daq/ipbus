@@ -36,7 +36,7 @@ func (e E) Send(subject, msg string) error {
     }
     auth := smtp.PlainAuth("", "solid.daq@gmail.com", e.pass, "smtp.gmail.com")
     out := []byte(fmt.Sprintf("Subject: %s\n%s", subject, msg))
-    err := smtp.SendMail("smtp.gmail.com:587", auth, "solid.daq@gmail.com", to, out)
+    err := smtp.SendMail("74.125.133.109:587", auth, "solid.daq@gmail.com", to, out)
     return err
 }
 
