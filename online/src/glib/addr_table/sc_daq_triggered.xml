@@ -18,6 +18,7 @@
 			<mask id="clk_sel" mask="0x8"/>
 			<mask id="idelctrl_rst" mask="0x10"/>
 			<mask id="prog" mask="0x20"/>
+			<mask id="ro_en" mask="0x40"/>
 			<mask id="chan_sel" mask="0xff00"/>
 			<mask id="board_id" mask="0xf0000000"/>
 		</word>
@@ -55,33 +56,37 @@
 			<mask id="derand_empty" mask="0x40"/>
 			<mask id="derand_full" mask="0x80"/>
 			<mask id="idel_ctr" mask="0x1f00"/>
+			<mask id="evt_cnt" mask="0xff0000"/>
 		</word>
 	</register>
 	<module id="timing" address="0x10" module="file://sc_timing_triggered.xml"/>
-	<register id="trig" address="0x20" description="trigger csr" fwinfo="endpoint;width=1">
+	<register id="trig" address="0x20" description="trigger csr" fwinfo="endpoint;width=2">
 		<word id="ctrl" address="0x0">
 			<mask id="en_coinc" mask="0x1"/>
+			<mask id="en_phys_trig" mask="0x2"/>
 			<mask id="seq_len" mask="0xf0"/>
 		</word>
 		<word id="stat_0" address="0x2">
-            <mask id="bp" mask="0x1"/>
-            <mask id="err" mask="0x2"/>
-            <mask id="derand_rdy" mask="0x4"/>
-            <mask id="derand_evt" mask="0x8"/>
-            <mask id="derand_aempty" mask="0x10"/>
-            <mask id="derand_afull" mask="0x20"/>
-            <mask id="derand_empty" mask="0x40"/>
-            <mask id="derand_full" mask="0x80"/>
-        </word>
+			<mask id="bp" mask="0x1"/>
+			<mask id="err" mask="0x2"/>
+			<mask id="derand_rdy" mask="0x4"/>
+			<mask id="derand_evt" mask="0x8"/>
+			<mask id="derand_aempty" mask="0x10"/>
+			<mask id="derand_afull" mask="0x20"/>
+			<mask id="derand_empty" mask="0x40"/>
+			<mask id="derand_full" mask="0x80"/>
+			<mask id="evt_cnt" mask="0xff00"/>
+		</word>
 		<word id="stat_1" address="0x3">
-            <mask id="bp" mask="0x1"/>
-            <mask id="err" mask="0x2"/>
-            <mask id="derand_rdy" mask="0x4"/>
-            <mask id="derand_evt" mask="0x8"/>
-            <mask id="derand_aempty" mask="0x10"/>
-            <mask id="derand_afull" mask="0x20"/>
-            <mask id="derand_empty" mask="0x40"/>
-            <mask id="derand_full" mask="0x80"/>
+			<mask id="bp" mask="0x1"/>
+			<mask id="err" mask="0x2"/>
+			<mask id="derand_rdy" mask="0x4"/>
+			<mask id="derand_evt" mask="0x8"/>
+			<mask id="derand_aempty" mask="0x10"/>
+			<mask id="derand_afull" mask="0x20"/>
+			<mask id="derand_empty" mask="0x40"/>
+			<mask id="derand_full" mask="0x80"/>
+			<mask id="evt_cnt" mask="0xff00"/>
 		</word>
 	</register>
 	<register id="sysmon" address="0x400" mode="block" size="0x400" description="sysmon access" fwinfo="endpoint;width=9"/>
