@@ -275,6 +275,36 @@ func (r *Reader) EnableReadoutChannels() {
     */
 }
 
+func (r *Reader) SetGlobalReadout(mode bool) {
+    fmt.Printf("GLIB%d: Setting global readout (csr.ctrl.ro_en) = %t\n", r.hw.Num, mode)
+    csrctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
+    p := ipbus.MakePacket(ipbus.Control)
+    val := uint32(0)
+    if mode {
+        val = 1
+    }
+    csrctrl.MaskedWrite("ro_en", val, &p)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
+
+func (r *Reader) SetPhysicsTrigger(mode bool) {
+    fmt.Printf("GLIB%d: Setting physics trigger mode (timing.csr.ctrl.ptrig_en) = %t\n", r.hw.Num, mode)
+    csrctrl := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
+    p := ipbus.MakePacket(ipbus.Control)
+    val := uint32(0)
+    if mode {
+        val = 1
+    }
+    csrctrl.MaskedWrite("ptrig_en", val, &p)
+    reply := make(chan data.ReqResp)
+    r.hw.Send(p, reply)
+    rr := <-reply
+    r.towrite <- rr
+}
+
 func (r *Reader) SetCoincidenceMode(mode bool) {
     if mode {
         fmt.Printf("GLIB%d enabling coincidence trigger.", r.hw.Num)
@@ -516,7 +546,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             n := len(lengths)
             if n > 0 {
                 newlen := lengths[n - 1][0]
-                if newlen == 0 && readout_stopped > 0 {
+                if (newlen > 0 || bufferlen > 0) && readout_stopped > 0 {
                     fmt.Printf("GLIB%d: buffer.count: %d -> %d\n", r.hw.Num, bufferlen, newlen)
                 }
                 bufferlen = newlen
@@ -1364,12 +1394,17 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
 
     - Make sure no triggers are being issued from the clock board
     - Use csr.ctrl.soft_rst to bring the registers to a known state
+    - Check csr.ctrl.ro_en = 0, timing.csr.ctrl.ptrig_en = 0
     - Check the clock is locked with csr.stat.clk_lock
     - Reset the sampling logic with timing.csr.ctrl.rst
     - Check that the channel derandomiser contents are all empty
     - Set up all the alignments, etc, and any other per-channel settings
     - Enable synchronous control on all channels of interest
     - Make sure the right window size, etc, is set up in csr.window_ctrl
+    - enable readout on relevant channels
+    - Set up and enable threshold triggers on relevant channels
+    - Start the event readout loop
+    - enable csr.ctrl.ro_en = 1
 
     Then either for single-board mode:
 
@@ -1383,9 +1418,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
 
     Then:
 
-    - Start the event readout loop
-    - Start randoms if required
-    - Program the trigger thresholds
+    - Enable timing.csr.ctrl.ptrig_en = 1 if necessary
     - Go through and enable trigger (not readout) for all channels of interest
     - Make sure readout is disabled for all channels not of interest (e.g. clock channels)
     - Enable readout for the channels of interest
@@ -1393,7 +1426,8 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
 
     To shut down:
 
-    - Disable readout on all channels.
+    - Disable threshold triggers with timing.csr.ctrl.ptrig_en = 0
+    - Disable readout on all channels using csr.ctrl.ro_en = 0.
     - Disable any source of random triggers
     - Read out the remaining buffer contents as per normal, until there's nothing left
     - Check that the channel derandomiser contents are all empty
@@ -1417,9 +1451,22 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         reader.TriggerWindow(0xff, 0x2f)
         reader.SetCoincidenceMode(r.Coincidence)
     }
+    // Enable readout channels
+    fmt.Printf("Enabling readout channels.\n")
+    for _, reader := range c.readers {
+        reader.EnableReadoutChannels()
+    }
+    // Set threshold triggers
+    if r.Threshold > 0 {
+        fmt.Printf("Setting threshold triggers.\n")
+        for _, reader := range c.readers {
+            reader.StartSelfTriggers(uint32(r.Threshold))
+        }
+    }
     // Synchronise GLIBs or reset buffer
     for _, reader := range c.readers {
         reader.PrepareSynchronisation()
+        reader.SetGlobalReadout(true)
     }
     if !c.internaltrigger {
         c.clock.SendTrigger()
@@ -1429,6 +1476,11 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         }
     }
     time.Sleep(time.Second)
+    // Start readout 
+    fmt.Printf("Starting readout routines.\n")
+    for _, reader := range c.readers {
+        go reader.Run(c.errs)
+    }
     // Check everything is locked
     fmt.Printf("Checking that all GLIBs are correclty configured.\n")
     for _, reader := range c.readers {
@@ -1437,12 +1489,6 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
             reader.ChanStat(i)
         }
     }
-    // Start readout 
-    fmt.Printf("Starting readout routines.\n")
-    for _, reader := range c.readers {
-        go reader.Run(c.errs)
-    }
-
     // Start random triggers
     fmt.Printf("Starting random triggers.\n")
     randrate := r.Rate
@@ -1458,16 +1504,10 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
             reader.StartRandomTriggers()
         }
     }
-    // Enable readout
-    fmt.Printf("Starting readout.\n")
-    for _, reader := range c.readers {
-        reader.EnableReadoutChannels()
-    }
     // Start threshold triggers
     if r.Threshold > 0 {
-        fmt.Printf("Starting threshold triggers.\n")
-        for _, reader := range c.readers {
-            reader.StartSelfTriggers(uint32(r.Threshold))
+        for _, reader := range c.readers{
+            reader.SetPhysicsTrigger(true)
         }
     }
     // Start ticker
@@ -1485,8 +1525,14 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         fmt.Printf("Control.Run() stopped by ctrl+c\n")
         quit = true
     }
+    // Disable threshold triggers
+    for _, reader := range c.readers {
+        reader.SetPhysicsTrigger(false)
+        reader.StopSelfTriggers()
+    }
     // Disable readout on all channels
     for _, reader := range c.readers {
+        reader.SetGlobalReadout(false)
         reader.DisableReadout()
     }
     // Stop random triggers

@@ -12,6 +12,7 @@
 			<mask id="fake" mask="0x100"/>
 			<mask id="rand_out" mask="0x200"/>
 			<mask id="rand_int" mask="0x400"/>
+			<mask id="ptrig_en" mask="0x800"/>
 			<mask id="rand_div" mask="0x1f0000"/>
 		</word>
 	</register>
