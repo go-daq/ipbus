@@ -150,7 +150,7 @@ func (dc *DataChannel) merge(offset TimingOffset, pedspa PedSPA, masks Masks) er
 }
 
 func (dc *DataChannel) SetThreshold(t uint32) {
-    dc.Threshold = t
+    dc.Threshold = uint32(dc.Pedestal) + t
 }
 
 func (dc *DataChannel) CalcThreshold(tspa float64) {
