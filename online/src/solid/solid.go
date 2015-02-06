@@ -461,7 +461,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     if !ok {
         panic(fmt.Errorf("timing.trig_ctr register not found."))
     }
-    emptybufferdelay := 5 * time.Millisecond
+    //emptybufferdelay := 5 * time.Millisecond
     nempty := 0
     ndata := 0
     readout_stopped := uint32(7)
@@ -471,19 +471,25 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // Read up to X words of data then read size
         p := ipbus.MakePacket(ipbus.Control)
         if bufferlen > 0 {
+            nreq := 0
             if bufferlen >= 255 {
                 //fmt.Println("Read 255 words.")
                 bufferdata.Read(255, &p)
                 bufferlen -= 255
-            }
-            // Currently reducing the value a little from 108
-            if bufferlen >= 100 {
-                //fmt.Println("Read 100 mode words.")
-                bufferdata.Read(100, &p)
-            } else {
+                nreq += 255
+                if bufferlen >= 100 {
+                 //   fmt.Println("Read 100 mode words.")
+                    bufferdata.Read(100, &p)
+                    nreq += 100
+                } else {
+                }
+            } else { // < 255 words can go in one transaction
                 //fmt.Printf("Read %d words.\n", bufferlen)
                 bufferdata.Read(uint8(bufferlen), &p)
+                nreq += int(bufferlen)
             }
+            // Currently reducing the value a little from 108
+            //fmt.Printf("Read %d words total\n", nreq)
         }
         buffersize.Read(&p)
         stat.Read(&p)
@@ -531,7 +537,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             if len(ro_stops) > 0 {
                 ro_stop := stat.GetMaskedReads("ro_stop", data)[0]
                 if ro_stop != readout_stopped {
-                    fmt.Printf("GLIB%d: ro_stop 0x%x -> 0x%x\n", r.hw.Num, readout_stopped, ro_stop)
+                    //fmt.Printf("GLIB%d: ro_stop 0x%x -> 0x%x\n", r.hw.Num, readout_stopped, ro_stop)
                     /*
                     if ro_stop > 0 {
                         r.TrigStat()
@@ -546,7 +552,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             n := len(lengths)
             if n > 0 {
                 newlen := lengths[n - 1][0]
-                if (newlen > 0 || bufferlen > 0) && readout_stopped > 0 {
+                if newlen == 0 && readout_stopped == 3 {
                     fmt.Printf("GLIB%d: buffer.count: %d -> %d\n", r.hw.Num, bufferlen, newlen)
                 }
                 bufferlen = newlen
@@ -566,7 +572,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
 */
                 ndata = 0
                 //fmt.Printf("Buffer empty, sleeping for %v\n", emptybufferdelay)
-                time.Sleep(emptybufferdelay)
+                //time.Sleep(emptybufferdelay)
             } else {
                 ndata += 1
 /*
