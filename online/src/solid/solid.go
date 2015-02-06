@@ -465,6 +465,10 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     nempty := 0
     ndata := 0
     readout_stopped := uint32(7)
+    nstopped0 := 0.0
+    nstopped1 := 0.0
+    ncycle := 0.0
+    readoutticker := time.NewTicker(30 * time.Second)
     emptying := false
     stopped := make(chan bool, 2)
     for running {
@@ -499,6 +503,13 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         r.hw.Send(p, r.read)
         select {
         // Signal to stop
+        case <-readoutticker.C:
+            stoppedrate0 := nstopped0 / ncycle * 100.0
+            stoppedrate1 := nstopped1 / ncycle * 100.0
+            fmt.Printf("GLIB%d: stopped %0.2f %, %02.f %\n", r.hw.Num, stoppedrate0, stoppedrate1)
+            nstopped0 = 0.0
+            nstopped1 = 0.0
+            ncycle = 0.0
         case stopped = <-r.Stop:
             emptying = true
             //running = false
@@ -536,6 +547,13 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             ro_stops := stat.GetMaskedReads("ro_stop", data)
             if len(ro_stops) > 0 {
                 ro_stop := stat.GetMaskedReads("ro_stop", data)[0]
+                ncycle += 1
+                if ro_stop & 0x1 > 0 {
+                    nstopped0 += 1
+                }
+                if ro_stop & 0x2 > 0 {
+                    nstopped1 += 1
+                }
                 if ro_stop != readout_stopped {
                     //fmt.Printf("GLIB%d: ro_stop 0x%x -> 0x%x\n", r.hw.Num, readout_stopped, ro_stop)
                     /*
