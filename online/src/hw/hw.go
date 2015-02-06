@@ -69,6 +69,7 @@ type HW struct {
 	// ensure that sent requests and their replies will not
 	// overrun this bound. This is not currently implemented.
 	Module glibxml.Module // Addresses of registers, ports, etc.
+    verbose bool
 }
 
 func (h *HW) init() {
@@ -190,6 +191,9 @@ func (h *HW) Run() {
 						}
 						if !reqreceived {
 							fmt.Printf("HW%d: Lost package wasn't received :(, resending at %v.\n", h.Num, time.Now())
+                            fmt.Printf("Setting packet ID = %d = 0x%x\n", h.nextid, h.nextid)
+                            lost.Out.ID = h.nextid
+                            fmt.Printf("Lost ID = %d = 0x%x\n", lost.Out.ID, lost.Out.ID)
 							resentreqresp, err := h.send(lost.Out, true)
 							if err != nil {
 								panic(err)
@@ -319,6 +323,7 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 	rr.Sent = time.Now()
 	if p.Type == ipbus.Resend {
         fmt.Printf("HW%d: Sent resend request at %v: 0x%x\n", h.Num, rr.Sent, rr.Bytes[:rr.RespIndex])
+        h.verbose = true
 	}
 	if verbose {
 		fmt.Printf("HW%d: sent %v\n", h.Num, p)
@@ -326,7 +331,7 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 	return rr, error(nil)
 }
 
-func (h HW) receive(rr data.ReqResp) {
+func (h * HW) receive(rr data.ReqResp) {
 	defer h.exit.CleanExit("HW.receive()")
 	// Write data into buffer from UDP read, timestamp reply and set raddr
 	n, addr, err := h.conn.ReadFrom(rr.Bytes[rr.RespIndex:])
@@ -339,6 +344,10 @@ func (h HW) receive(rr data.ReqResp) {
 	if err := rr.Decode(); err != nil {
 		panic(err)
 	}
+    if h.verbose {
+        fmt.Printf("Received packet with ID = %d = 0x%x\n", rr.In.ID, rr.In.ID)
+        h.verbose = false
+    }
 	if rr.In.ID != rr.Out.ID {
 		if rr.In.Type != ipbus.Status {
 			panic(fmt.Errorf("Received an unexpected packet ID: %d -> %d", rr.Out.ID, rr.In.ID))
