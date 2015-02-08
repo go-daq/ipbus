@@ -69,7 +69,7 @@ type HW struct {
 	// ensure that sent requests and their replies will not
 	// overrun this bound. This is not currently implemented.
 	Module glibxml.Module // Addresses of registers, ports, etc.
-    verbose bool
+    nverbose int
 }
 
 func (h *HW) init() {
@@ -163,6 +163,7 @@ func (h *HW) Run() {
 						if err := statusreply.Parse(reply.Bytes[reply.RespIndex:]); err != nil {
 							panic(err)
 						}
+                        h.nextid = uint16(statusreply.Next)
 						if lost.Out.Version != ipbus.Version {
 							panic(fmt.Errorf("HW%d: Trying to handle invalid lost packet: %v", h.Num, lost))
 						}
@@ -192,7 +193,44 @@ func (h *HW) Run() {
 						if !reqreceived {
 							fmt.Printf("HW%d: Lost package wasn't received :(, resending at %v.\n", h.Num, time.Now())
                             fmt.Printf("Setting packet ID = %d = 0x%x\n", h.nextid, h.nextid)
-                            lost.Out.ID = h.nextid
+                            oldid := lost.Out.ID
+                            newid := h.nextid
+                            fmt.Printf("Cleaning up reply channel map.\nGetting reply channel for old ID = %d\n", oldid)
+                            req := getchan(oldid)
+                            h.outps.read <- req
+                            rep := <-req.rep
+                            fmt.Printf("resp = %v\n", rep)
+                            if rep.ok {
+                                ch := rep.c
+                                fmt.Printf("Got channel for old ID, removing channel with ID = %d\n", oldid)
+                                req = remchan(oldid)
+                                h.outps.remove <- req
+                                rep = <-req.rep
+                                if rep.err != nil {
+                                    panic(err)
+                                }
+                                fmt.Printf("Removing channel with new ID = %d\n", newid)
+                                req = remchan(newid)
+                                h.outps.remove <- req
+                                rep = <-req.rep
+                                if rep.err != nil {
+                                    fmt.Printf("Err = %v\n", rep.err)
+                                }
+                                fmt.Printf("resp = %v\n", rep)
+                                fmt.Printf("Removed old channel, adding channel with new ID = %d\n", newid)
+                                req = addchan(newid, ch)
+                                h.outps.add <- req
+                                rep = <-req.rep
+                                if rep.err != nil {
+                                    panic(rep.err)
+                                }
+                                fmt.Printf("resp = %v\n", rep)
+                            } else {
+                                panic(fmt.Errorf("Failed updating output channel %d -> %d", oldid, newid))
+                            }
+                            fmt.Printf("Finished cleaning up chanmap.\n")
+                            lost.Out.ID = newid
+                            h.nextid += 1
                             fmt.Printf("Lost ID = %d = 0x%x\n", lost.Out.ID, lost.Out.ID)
 							resentreqresp, err := h.send(lost.Out, true)
 							if err != nil {
@@ -243,6 +281,7 @@ func (h *HW) Run() {
 				}
 			case now := <-tick.C:
 				// handle timed out request
+                h.nverbose = 5
 				ntimeout += 1
 				if ntimeout > 10 {
 					running = false
@@ -261,6 +300,9 @@ func (h *HW) Run() {
 			tick.Stop()
 		}
 		if received {
+            if h.nverbose > 0 {
+                fmt.Printf("HW%d: removing chanmap entry for packet ID = %d\n", rr.Out.ID)
+            }
 			// Remove the channel from the output map
 			req := remchan(rr.Out.ID)
 			h.outps.remove <- req
@@ -323,16 +365,16 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 	rr.Sent = time.Now()
 	if p.Type == ipbus.Resend {
         fmt.Printf("HW%d: Sent resend request at %v: 0x%x\n", h.Num, rr.Sent, rr.Bytes[:rr.RespIndex])
-        h.verbose = true
 	}
-	if verbose {
-		fmt.Printf("HW%d: sent %v\n", h.Num, p)
+	if h.nverbose > 0 {
+		fmt.Printf("HW%d: sent packet with ID = %d = 0x%x\n", h.Num, rr.Out.ID, rr.Out.ID)
 	}
 	return rr, error(nil)
 }
 
 func (h * HW) receive(rr data.ReqResp) {
-	defer h.exit.CleanExit("HW.receive()")
+    msg := fmt.Sprintf("HW.receive() on HW%d", h.Num)
+	defer h.exit.CleanExit(msg)
 	// Write data into buffer from UDP read, timestamp reply and set raddr
 	n, addr, err := h.conn.ReadFrom(rr.Bytes[rr.RespIndex:])
 	rr.Bytes = rr.Bytes[:rr.RespIndex+n]
@@ -344,9 +386,9 @@ func (h * HW) receive(rr data.ReqResp) {
 	if err := rr.Decode(); err != nil {
 		panic(err)
 	}
-    if h.verbose {
-        fmt.Printf("Received packet with ID = %d = 0x%x\n", rr.In.ID, rr.In.ID)
-        h.verbose = false
+    if h.nverbose > 0 {
+        fmt.Printf("HW%d: Received packet with ID = %d = 0x%x\n", h.Num, rr.In.ID, rr.In.ID)
+        h.nverbose -= 1
     }
 	if rr.In.ID != rr.Out.ID {
 		if rr.In.Type != ipbus.Status {
@@ -386,10 +428,18 @@ func addchan(id uint16, c chan data.ReqResp) chanmapreq {
 	return chanmapreq{val, rep}
 }
 
+
 type chanmap struct {
 	m                 []chan data.ReqResp
 	exists            []bool
 	add, remove, read chan chanmapreq
+}
+
+func (cm *chanmap) movechan(oldid, newid uint16) {
+    cm.exists[oldid] = false
+    ch := cm.m[oldid]
+    cm.m[newid] = ch
+    cm.exists[newid] = true
 }
 
 func newchanmap() chanmap {
