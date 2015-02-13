@@ -28,6 +28,27 @@ import (
 	"time"
 )
 
+type packet struct {
+    Data []byte
+    RAddr net.Addr
+}
+
+func emptyPacket() packet {
+    d := make([]byte, 2048)
+    return packet{Data: d}
+}
+
+func newPacket(data []byte) packet {
+    return packet{Data: data}
+}
+
+type request struct {
+    request ipbus.Packet
+    reqresp data.ReqResp
+    sent, received time.Time
+    dest chan data.ReqResp
+}
+
 var nhw = 0
 
 func New(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs chan data.ErrPack) *HW {
@@ -35,56 +56,105 @@ func New(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs c
 	if err != nil {
 		panic(err)
 	}
-	hw := HW{Num: num, raddr: raddr, timeout: dt, nextid: uint16(1), exit: exit, errs: errs,
-		Module: mod}
+	hw := HW{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), exit: exit, errs: errs,
+    Module: mod, inflight:0, maxflight: 1}
 	hw.init()
 	fmt.Printf("Created new HW: %v\n", hw)
 	return &hw
 }
 
+type idlog struct {
+    ids []uint16
+    first, n, max int
+}
+
+func (i * idlog) add(id uint16) error {
+    if id == 0 {
+        return fmt.Errorf("Cannot add id = 0 to id logger.")
+    }
+    if i.n == i.max {
+        return fmt.Errorf("Cannot add id = %d to full id logger.", id)
+    }
+    next := (i.first + i.n) % i.max
+    i.ids[next] = id
+    i.n += 1
+    return error(nil)
+}
+
+func (i * idlog) remove() error {
+    if i.n == 0 {
+        return fmt.Errorf("Cannot remove id from empty id logger.")
+    }
+    i.first = (i.first + 1) % i.max
+    i.n -= 1
+    return error(nil)
+}
+
+func (i * idlog) oldest() (uint16, bool) {
+    return i.ids[i.first], i.n > 0
+}
+
+func (i * idlog) newest() (uint16, bool) {
+    newest := (i.first + i.n) % i.max
+    return i.ids[newest], i.n > 0
+}
+
+func (i * idlog) sorted() []uint16 {
+    vals := make([]uint16, 0, i.n)
+    for j := 0; j < i.n; j++ {
+        next := (i.first + j) % i.max
+        vals = append(vals, i.ids[next])
+    }
+    return vals
+}
+
+func (i idlog) String() string {
+    return fmt.Sprintf("ids: %v, first = %d, n = %d", i.ids, i.first, i.n)
+}
+
+
+func newIDLog(size int) idlog {
+    ids := make([]uint16, size)
+    return idlog{ids: ids, first: 0, n: 0, max: size}
+}
+
 type HW struct {
 	Num    int
-	tosend chan ipbus.Packet // IPbus packets queued up to send to the
-	// device. Users should not put packets in the
-	// channel directly but should call the
-	// hw.Send(packet, chan) method.
-	replies chan data.ReqResp // Responses read from the socket, used by the
-	// hw.Run() method.
-	irecent int
-	recent  []uint16 // Recent packet IDs
-	outps   chanmap
-	//outps      map[uint16]chan data.ReqResp // map of transaction
+	replies chan packet
 	exit       *crash.Exit
 	errs       chan data.ErrPack // Channel to send errors to whomever cares.
 	conn       *net.UDPConn      // UDP connection with the device.
 	raddr      *net.UDPAddr      // UDP address of the hardware device.
 	configured bool              // Flag to ensure connection is configured, etc. before
 	// attempting to send data.
-	timeout time.Duration // The time period to wait for a reply before it
 	// is assumed to be lost and handled as such.
-	nextid uint16 // The packet ID expected next by the hardware.
+	nextID uint16 // The packet ID expected next by the hardware.
 	mtu    uint32 // The Maxmimum transmission unit is not currently used,
 	// but defines the largest packet size (in bytes) to be
 	// sent. It is the HW interface's responsibility to
 	// ensure that sent requests and their replies will not
 	// overrun this bound. This is not currently implemented.
 	Module glibxml.Module // Addresses of registers, ports, etc.
-    nverbose int
+    // New stuff for multiple packets in flight:
+    inflight, maxflight int
+    tosend, flying, replied map[uint16]request
+    queuedids, flyingids idlog
+    timedout * time.Ticker
+    incoming chan request
+    waittime time.Duration
 }
 
 func (h *HW) init() {
-	h.tosend = make(chan ipbus.Packet, 100)
-	h.replies = make(chan data.ReqResp)
-	//h.outps = make(map[uint16]chan data.ReqResp)
-	h.recent = make([]uint16, 100)
-	h.outps = newchanmap()
-	go h.outps.run()
-	h.irecent = 0
-	fmt.Printf("initialised %v\n", h)
+	h.replies = make(chan packet)
+    h.tosend = make(map[uint16]request)
+    h.flying = make(map[uint16]request)
+    h.replied= make(map[uint16]request)
+    h.queuedids = newIDLog(256)
+    h.flyingids = newIDLog(32)
 }
 
 func (h HW) String() string {
-	return fmt.Sprintf("HW%d: in = %p, RAddr = %v, dt = %v", h.Num, &h.tosend, h.raddr, h.timeout)
+	return fmt.Sprintf("HW%d: in = %p, RAddr = %v, dt = %v", h.Num, &h.tosend, h.raddr, h.waittime)
 }
 
 // Connect to HW's UDP socket.
@@ -94,6 +164,16 @@ func (h *HW) config() error {
 		return err
 	}
 	return error(nil)
+}
+
+func (h *HW) updatetimeout() {
+    if h.inflight > 0 {
+        first, ok := h.flyingids.oldest()
+        if ok {
+            dt := h.waittime - time.Since(h.flying[first].sent)
+            h.timedout = time.NewTicker(dt)
+        }
+    }
 }
 
 // Get the device's status to set MTU and next ID.
@@ -108,15 +188,111 @@ func (h *HW) ConfigDevice() {
 		panic(err)
 	}
 	h.mtu = statusreply.MTU
-	h.nextid = uint16(statusreply.Next)
-	fmt.Printf("Configured device: MTU = %d, next ID = %d\n", h.mtu, h.nextid)
+	h.nextID = uint16(statusreply.Next)
+	fmt.Printf("Configured device: MTU = %d, next ID = %d\n", h.mtu, h.nextID)
 }
 
+// Send the next queued packet if there are slots available
+func (h * HW) sendnext() error {
+    err := error(nil)
+    for h.inflight < h.maxflight && len(h.tosend) > 0 {
+        first, ok := h.queuedids.oldest()
+        if !ok {
+            return fmt.Errorf("Failed to get oldest queued ID")
+        }
+        h.queuedids.remove()
+        req := h.tosend[first]
+        delete(h.tosend, first)
+        n, err := h.conn.Write(req.reqresp.Bytes[:req.reqresp.RespIndex])
+        if err != nil {
+            return fmt.Errorf("Failed after sending %d bytes: %v", n, err)
+        }
+        req.sent = time.Now()
+        h.flying[first] = req
+        h.inflight += 1
+        if h.inflight == 1 {
+            h.timedout = time.NewTicker(h.waittime)
+        }
+    }
+    return err
+}
+
+func (h * HW) returnreply() {
+    sentrep := true
+    for sentrep {
+        sentrep = false
+        first, ok := h.flyingids.oldest()
+        if !ok {
+            break
+        }
+        p, ok := h.replied[first]
+        if ok {
+            h.flyingids.remove()
+            delete(h.replied, first)
+            p.dest <- p.reqresp
+            sentrep = true
+        }
+    }
+}
+
+// NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
+func (h *HW) Run() {
+    running := true
+    go h.receive()
+    for running {
+        select {
+        case req := <-h.incoming:
+            // Handle incoming request
+            // If there are flight slots free send and update ticker, if not queue
+            if req.reqresp.Out.Type != ipbus.Status {
+                req.reqresp.Out.ID = h.nextid()
+            }
+            if err := req.reqresp.EncodeOut(); err != nil {
+                panic(fmt.Errorf("HW%d: %v", h.Num, err))
+            }
+            h.tosend[req.reqresp.Out.ID] = req
+            err := h.queuedids.add(req.reqresp.Out.ID)
+            if err != nil {
+                panic(err)
+            }
+            h.sendnext()
+        case rep := <-h.replies:
+            // Handle reply
+            // Match with requests in flight slots
+            // If it's the oldest request send it back, otherwise queue reply
+            // If there are queued requests send one
+            // Update ticker
+            id := uint16(rep.Data[1]) << 8
+            id |= uint16(rep.Data[2])
+            req, ok := h.flying[id]
+            if ok {
+                oldest, _ := h.flyingids.oldest()
+                if id == oldest {
+                    h.timedout.Stop()
+                    h.updatetimeout()
+                }
+                delete(h.flying, id)
+                h.inflight -= 1
+                req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
+                req.received = time.Now()
+                h.replied[id] = req
+                h.sendnext()
+                h.returnreply()
+            } else {
+                panic(fmt.Errorf("HW%d: Received packet with ID = %d, no match in %v", h.Num, id, h.inflight))
+            }
+        case <-h.timedout.C:
+            // Handle timeout on oldest packet in flight
+            panic(fmt.Errorf("HW%D: lost a packet :(", h.Num))
+        }
+    }
+}
 /*
  * Continuously send queued packets, handle lost responses and put the
  * responses into user provided channels. Keep running until the h.send
  * channel is closed.
  */
+/*
 func (h *HW) Run() {
 	defer h.exit.CleanExit("HW.Run()")
 	if !h.configured {
@@ -313,40 +489,52 @@ func (h *HW) Run() {
 		}
 	}
 }
+*/
 
 /*
    When a user wants to send a packet they also provide a channel
    which will receive the reply.
 */
-func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
-	// Set the packet's ID if it is a control packet with ID != 0
-	if p.ID != uint16(0) && p.Type == ipbus.Control {
-		p.ID = h.nextid
-		if h.nextid == 65535 {
-			h.nextid = 1
-			//fmt.Println("Cycled through package IDs.")
-		} else {
-			h.nextid += 1
-		}
-		//fmt.Printf("HW %d: id %d sent, next = %d\n", h.Num, p.ID, h.nextid)
-	}
-	req := addchan(p.ID, outp)
-	h.outps.add <- req
-	rep := <-req.rep
-	if rep.err != nil {
-		return rep.err
-	}
-	h.tosend <- p
-	//fmt.Printf("HW%d: %d in tosend channel at %p.\n", h.Num, len(h.tosend), &h.tosend)
-	return error(nil)
+
+func (h *HW) nextid() uint16 {
+    id := h.nextID
+    if h.nextID == 65535 {
+        h.nextID = 1
+    } else {
+        h.nextID += 1
+    }
+    return id
 }
 
+func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
+    rr := data.CreateReqResp(p)
+    req := request{request: p, reqresp: rr, dest: outp}
+    h.incoming <- req
+    return error(nil)
+}
+
+// Send a packet out
+func (h *HW) send(data chan *packet, errs chan error) {
+    running := true
+    for running {
+        p, ok := <-data
+        if !ok {
+            running = false
+            continue
+        }
+        n, err := h.conn.Write(p.Data)
+        if err != nil {
+            errs <- fmt.Errorf("HW%d sent %d byte of data: %v\n", h.Num, n, err)
+        }
+    }
+
+}
+
+/*
 func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
-	/*
-	   if p.ID == 1 {
-	       fmt.Printf("Sending packet with ID = 1: %v\n", p)
-	   }
-	*/
+//	   if p.ID == 1 {
+//	       fmt.Printf("Sending packet with ID = 1: %v\n", p)
+//	   }
 	// Make ReqResp
 	rr := data.CreateReqResp(p)
 	// encode outgoing packet
@@ -371,7 +559,24 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 	}
 	return rr, error(nil)
 }
+*/
 
+// Receive incoming packets
+func (h *HW) receive() {
+    running := true
+    for running {
+        p := emptyPacket()
+        n, addr, err := h.conn.ReadFrom(p.Data)
+        if err != nil {
+            panic(fmt.Errorf("HW%d read %d bytes from %v: %v\n", h.Num, n, addr, err))
+        }
+        p.Data = p.Data[:n]
+        p.RAddr = addr
+        h.replies <- p
+    }
+
+}
+/*
 func (h * HW) receive(rr data.ReqResp) {
     msg := fmt.Sprintf("HW.receive() on HW%d", h.Num)
 	defer h.exit.CleanExit(msg)
@@ -399,7 +604,9 @@ func (h * HW) receive(rr data.ReqResp) {
 	// Send data.ReqResp containing the buffer into replies
 	h.replies <- rr
 }
+*/
 
+/*
 type chanmapitem struct {
 	id  uint16
 	c   chan data.ReqResp
@@ -467,12 +674,10 @@ func (m *chanmap) run() {
 			}
 			m.m[req.val.id] = req.val.c
 			m.exists[req.val.id] = true
-			/*
-			   if _, ok := m.m[req.val.id]; ok {
-			       err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
-			   }
-			   m.m[req.val.id] = req.val.c
-			*/
+//			   if _, ok := m.m[req.val.id]; ok {
+//			       err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
+//			   }
+//			   m.m[req.val.id] = req.val.c
 			req.val.err = err
 			req.rep <- req.val
 		case req := <-m.remove:
@@ -481,22 +686,19 @@ func (m *chanmap) run() {
 				err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
 			}
 			m.exists[req.val.id] = false
-			/*
-			   if _, ok := m.m[req.val.id]; !ok {
-			       err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
-			   } else {
-			       delete(m.m, req.val.id)
-			   }
-			*/
+//			   if _, ok := m.m[req.val.id]; !ok {
+//			       err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
+//			   } else {
+//			       delete(m.m, req.val.id)
+//			   }
 			req.val.err = err
 			req.rep <- req.val
 		case req := <-m.read:
 			req.val.ok = m.exists[req.val.id]
 			req.val.c = m.m[req.val.id]
-			/*
-			   req.val.c, req.val.ok = m.m[req.val.id]
-			*/
+//			   req.val.c, req.val.ok = m.m[req.val.id]
 			req.rep <- req.val
 		}
 	}
 }
+*/
