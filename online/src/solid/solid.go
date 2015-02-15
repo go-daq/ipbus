@@ -770,6 +770,7 @@ func (r Reader) Reset(nuke bool) {
     csrctrl.MaskedWrite("soft_rst", 1, &p)
     r.hw.Send(p, reply)
     rr := <-reply
+    fmt.Printf("ReqResp = %v\n", rr)
     r.towrite <- rr
     time.Sleep(time.Second)
     p = ipbus.MakePacket(ipbus.Control)
@@ -899,9 +900,9 @@ func (r Reader) Stat() {
 }
 
 func (r Reader) CheckEmpty() (empty bool) {
-    r.TrigStat()
+    //r.TrigStat()
     lastchecked := -2
-    fmt.Printf("GLIB%d: checking if readout empty\n", r.hw.Num)
+    //fmt.Printf("GLIB%d: checking if readout empty\n", r.hw.Num)
     stat0 := r.hw.Module.Registers["trig"].Words["stat_0"]
     stat1 := r.hw.Module.Registers["trig"].Words["stat_1"]
     chanstat := r.hw.Module.Registers["chan_csr"].Words["stat"]
@@ -917,12 +918,12 @@ func (r Reader) CheckEmpty() (empty bool) {
         return empty
     }
     lastchecked += 1
-    fmt.Printf("stat0 has derand_empty = 1, lastchecked = %d\n", lastchecked)
+    //fmt.Printf("stat0 has derand_empty = 1, lastchecked = %d\n", lastchecked)
     empty = stat1.GetMaskedReads("derand_empty", rr)[0] == 1
     if !empty {
         return empty
     }
-    fmt.Printf("stat1 has derand_empty = 1\n")
+    //fmt.Printf("stat1 has derand_empty = 1\n")
     lastchecked += 1
     for i := uint32(0); i < 75; i++ {
         p = ipbus.MakePacket(ipbus.Control)

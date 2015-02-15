@@ -145,12 +145,14 @@ type HW struct {
 }
 
 func (h *HW) init() {
-	h.replies = make(chan packet)
+	h.replies = make(chan packet, 100)
     h.tosend = make(map[uint16]request)
     h.flying = make(map[uint16]request)
     h.replied= make(map[uint16]request)
     h.queuedids = newIDLog(256)
     h.flyingids = newIDLog(32)
+    h.timedout = time.NewTicker(10000 * time.Second)
+    h.incoming = make(chan request, 100)
 }
 
 func (h HW) String() string {
@@ -190,6 +192,7 @@ func (h *HW) ConfigDevice() {
 	h.mtu = statusreply.MTU
 	h.nextID = uint16(statusreply.Next)
 	fmt.Printf("Configured device: MTU = %d, next ID = %d\n", h.mtu, h.nextID)
+    h.configured = true
 }
 
 // Send the next queued packet if there are slots available
@@ -203,18 +206,27 @@ func (h * HW) sendnext() error {
         h.queuedids.remove()
         req := h.tosend[first]
         delete(h.tosend, first)
-        n, err := h.conn.Write(req.reqresp.Bytes[:req.reqresp.RespIndex])
+        err = h.sendpack(req)
         if err != nil {
-            return fmt.Errorf("Failed after sending %d bytes: %v", n, err)
+            return err
         }
-        req.sent = time.Now()
+        req.reqresp.Sent = time.Now()
         h.flying[first] = req
+        h.flyingids.add(first)
         h.inflight += 1
         if h.inflight == 1 {
             h.timedout = time.NewTicker(h.waittime)
         }
     }
     return err
+}
+
+func (h *HW) sendpack(req request) error {
+    n, err := h.conn.Write(req.reqresp.Bytes[:req.reqresp.RespIndex])
+    if err != nil {
+        return fmt.Errorf("Failed after sending %d bytes: %v", n, err)
+    }
+    return error(nil)
 }
 
 func (h * HW) returnreply() {
@@ -237,6 +249,10 @@ func (h * HW) returnreply() {
 
 // NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
 func (h *HW) Run() {
+    if err := h.config(); err != nil {
+        panic(err)
+    }
+    go h.ConfigDevice()
     running := true
     go h.receive()
     for running {
@@ -244,18 +260,26 @@ func (h *HW) Run() {
         case req := <-h.incoming:
             // Handle incoming request
             // If there are flight slots free send and update ticker, if not queue
-            if req.reqresp.Out.Type != ipbus.Status {
+            if req.reqresp.Out.Type == ipbus.Status {
+                if err := req.reqresp.EncodeOut(); err != nil {
+                    panic(fmt.Errorf("HW%d: %v", h.Num, err))
+                }
+                req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
+                h.sendpack(req)
+                h.flying[0] = req
+            } else {
                 req.reqresp.Out.ID = h.nextid()
+                if err := req.reqresp.EncodeOut(); err != nil {
+                    panic(fmt.Errorf("HW%d: %v", h.Num, err))
+                }
+                req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
+                h.tosend[req.reqresp.Out.ID] = req
+                err := h.queuedids.add(req.reqresp.Out.ID)
+                if err != nil {
+                    panic(err)
+                }
+                h.sendnext()
             }
-            if err := req.reqresp.EncodeOut(); err != nil {
-                panic(fmt.Errorf("HW%d: %v", h.Num, err))
-            }
-            h.tosend[req.reqresp.Out.ID] = req
-            err := h.queuedids.add(req.reqresp.Out.ID)
-            if err != nil {
-                panic(err)
-            }
-            h.sendnext()
         case rep := <-h.replies:
             // Handle reply
             // Match with requests in flight slots
@@ -264,26 +288,43 @@ func (h *HW) Run() {
             // Update ticker
             id := uint16(rep.Data[1]) << 8
             id |= uint16(rep.Data[2])
-            req, ok := h.flying[id]
-            if ok {
-                oldest, _ := h.flyingids.oldest()
-                if id == oldest {
-                    h.timedout.Stop()
-                    h.updatetimeout()
+            if id == 0 {
+                if req, ok := h.flying[id]; ok {
+                    delete(h.flying, id)
+                    req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
+                    req.reqresp.RAddr = rep.RAddr
+                    req.received = time.Now()
+                    if err := req.reqresp.Decode(); err != nil {
+                        panic(err)
+                    }
+                    req.dest <- req.reqresp
                 }
-                delete(h.flying, id)
-                h.inflight -= 1
-                req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
-                req.received = time.Now()
-                h.replied[id] = req
-                h.sendnext()
-                h.returnreply()
             } else {
-                panic(fmt.Errorf("HW%d: Received packet with ID = %d, no match in %v", h.Num, id, h.inflight))
+                req, ok := h.flying[id]
+                if ok {
+                    h.inflight -= 1
+                    oldest, _ := h.flyingids.oldest()
+                    if id == oldest {
+                        h.timedout.Stop()
+                        h.updatetimeout()
+                    }
+                    delete(h.flying, id)
+                    req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
+                    req.reqresp.RAddr = rep.RAddr
+                    req.reqresp.Received = time.Now()
+                    if err := req.reqresp.Decode(); err != nil {
+                        panic(err)
+                    }
+                    h.replied[id] = req
+                    h.sendnext()
+                    h.returnreply()
+                } else {
+                    panic(fmt.Errorf("HW%d: Received packet with ID = %d, no match in %v", h.Num, id, h.inflight))
+                }
             }
         case <-h.timedout.C:
             // Handle timeout on oldest packet in flight
-            panic(fmt.Errorf("HW%D: lost a packet :(", h.Num))
+            panic(fmt.Errorf("HW%d: lost a packet :(", h.Num))
         }
     }
 }
@@ -522,6 +563,7 @@ func (h *HW) send(data chan *packet, errs chan error) {
             running = false
             continue
         }
+        fmt.Printf("Sent a packet\n")
         n, err := h.conn.Write(p.Data)
         if err != nil {
             errs <- fmt.Errorf("HW%d sent %d byte of data: %v\n", h.Num, n, err)
