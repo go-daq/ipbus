@@ -1480,7 +1480,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         reader.Reset(c.nuke)
         reader.TrigStat()
         reader.Align()
-        reader.TriggerWindow(0xff, 0x2f)
+        reader.TriggerWindow(0xff, 0x19)
         reader.SetCoincidenceMode(r.Coincidence)
     }
     // Enable readout channels
