@@ -20,6 +20,7 @@ func main() {
     coincidence := flag.Bool("coincidence", false, "require vertical/horizonatal coincidence to trigger.")
     duration := flag.Int("duration", 30, "Length o run [s]")
     threshold := flag.Int("threshold", -1, "Trigger threshold [ADC count above pedestal")
+    muthreshold := flag.Int("muthreshold", 400, "Muon panel trigger threshold [ADC count above pedestal")
     randrate := flag.Float64("randrate", -1.0, "Random trigger rate [Hz]")
     nchans := flag.Int("nchans", 76, "Number of channels per GLIB.")
     nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
@@ -121,7 +122,7 @@ func main() {
             fn += "nocoinc_"
         }
         fn += *name
-        r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *randrate, *coincidence)
+        r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *muthreshold, *randrate, *coincidence)
         if err != nil {
             panic(err)
         }

@@ -327,8 +327,8 @@ func (r *Reader) SetCoincidenceMode(mode bool) {
     r.towrite <- rr
 }
 
-func (r *Reader) StartSelfTriggers(thr uint32) {
-    r.cfg.SetThresholds(thr)
+func (r *Reader) StartSelfTriggers(thr, muthr uint32) {
+    r.cfg.SetThresholds(thr, muthr)
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
@@ -1492,7 +1492,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     if r.Threshold > 0 {
         fmt.Printf("Setting threshold triggers.\n")
         for _, reader := range c.readers {
-            reader.StartSelfTriggers(uint32(r.Threshold))
+            reader.StartSelfTriggers(uint32(r.Threshold), uint32(r.MuThreshold))
         }
     }
     // Synchronise GLIBs or reset buffer
