@@ -7,6 +7,7 @@ import (
     "flag"
     "fmt"
     "mail"
+    "os/user"
     "solid"
     "strings"
     "runtime"
@@ -29,6 +30,20 @@ func main() {
     allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
     passfile := flag.String("pass", "pass.txt", "Email password file.")
     flag.Parse()
+    modallowed := *allowmod
+    if modallowed {
+        currentuser, err := user.Current()
+        fmt.Printf("Allowing run with modifications requested by %v [%s]\n", currentuser, currentuser.Username)
+        if err != nil {
+            modallowed = false
+            fmt.Printf("Unable to get current user, cannot allow modifications.\n")
+        } else {
+            if currentuser.Username != "ryder" {
+                modallowed = false
+                fmt.Printf("Only Nick Ryder can run with local modifications.\n")
+            }
+        }
+    }
     if *nchans != 38 && *nchans != 76 {
         panic(fmt.Errorf("Cannot have %d GLIB channels. Must be 38 or 76.", *nchans))
     }
@@ -126,7 +141,7 @@ func main() {
         if err != nil {
             panic(err)
         }
-        if r.Commit.Modified && !(*allowmod) {
+        if r.Commit.Modified && !(modallowed) {
             panic(fmt.Errorf("Code has local modifications: %v\n", r.Commit))
         }
         quit, errp := control.Run(r)

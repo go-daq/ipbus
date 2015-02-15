@@ -1,12 +1,21 @@
+import optparse
 import os
 
-tmpdir = "/data/fast/runatbr2/run/"
-storage = "/data/fast/runatbr2/stoarge/"
+parser = optparse.OptionParser()
+parser.add_option("-t", "--test", default=False, action="store_true")
+parser.add_option("-a", "--allowmod", default=False, action="store_true")
+opts, args = parser.parse_args()
 
-runcmd ="../../bin/run -threshold 150 -duration 300 -nrun -1 -coincidence -dir %s -store %s" % (tmpdir, storage)
+tmpdir = "/data/fast/runatbr2/run/"
+storage = "/data/fast/runatbr2/storage/"
+
+runcmd = "../../bin/run -threshold 150 -duration 300 -nrun -1 -coincidence -dir %s -store %s" % (tmpdir, storage)
+if opts.allowmod:
+    runcmd += " -allowmod"
 while True:
+    print runcmd
     os.system(runcmd)
-    files = os.listidr(tmpdir)
+    files = os.listdir(tmpdir)
     for fn in files:
         tmpfn = os.path.join(tmpdir, fn)
         stat = os.stat(tmpfn)
@@ -18,3 +27,5 @@ while True:
         else:
             cmd = "rm %s" % tmpfn
             os.system(cmd)
+    if opts.test:
+        break
