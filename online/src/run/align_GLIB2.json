@@ -1,0 +1,514 @@
+[
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 0
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 8, 
+    "Phase": 1, 
+    "Channel": 1
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 2
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 10, 
+    "Phase": 1, 
+    "Channel": 3
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 4
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 5
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 6
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 7
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 8, 
+    "Phase": 1, 
+    "Channel": 10
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 11
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 9, 
+    "Phase": 1, 
+    "Channel": 12
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 11, 
+    "Phase": 1, 
+    "Channel": 13
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 11, 
+    "Phase": 1, 
+    "Channel": 14
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 8, 
+    "Phase": 1, 
+    "Channel": 15
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 10, 
+    "Phase": 1, 
+    "Channel": 16
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 1, 
+    "Increment": 9, 
+    "Phase": 1, 
+    "Channel": 17
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 3, 
+    "Invert": 0, 
+    "Increment": 28, 
+    "Phase": 1, 
+    "Channel": 19
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 3, 
+    "Invert": 0, 
+    "Increment": 28, 
+    "Phase": 1, 
+    "Channel": 20
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 3, 
+    "Invert": 0, 
+    "Increment": 26, 
+    "Phase": 1, 
+    "Channel": 21
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 3, 
+    "Invert": 0, 
+    "Increment": 27, 
+    "Phase": 1, 
+    "Channel": 22
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 4, 
+    "Phase": 1, 
+    "Channel": 23
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 4, 
+    "Phase": 1, 
+    "Channel": 24
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 3, 
+    "Invert": 0, 
+    "Increment": 28, 
+    "Phase": 1, 
+    "Channel": 25
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 3, 
+    "Invert": 0, 
+    "Increment": 26, 
+    "Phase": 1, 
+    "Channel": 26
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 4, 
+    "Phase": 1, 
+    "Channel": 29
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 30
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 31
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 6, 
+    "Phase": 1, 
+    "Channel": 32
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 6, 
+    "Phase": 1, 
+    "Channel": 33
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 4, 
+    "Phase": 1, 
+    "Channel": 34
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 35
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 4, 
+    "Invert": 0, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 36
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 1, 
+    "Invert": 1, 
+    "Increment": 28, 
+    "Phase": 1, 
+    "Channel": 38
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 4, 
+    "Phase": 1, 
+    "Channel": 39
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 1, 
+    "Invert": 1, 
+    "Increment": 28, 
+    "Phase": 1, 
+    "Channel": 40
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 1, 
+    "Invert": 1, 
+    "Increment": 27, 
+    "Phase": 1, 
+    "Channel": 41
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 42
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 1, 
+    "Invert": 1, 
+    "Increment": 27, 
+    "Phase": 1, 
+    "Channel": 43
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 6, 
+    "Phase": 1, 
+    "Channel": 44
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 45
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 48
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 49
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 4, 
+    "Phase": 1, 
+    "Channel": 50
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 51
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 6, 
+    "Phase": 1, 
+    "Channel": 52
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 53
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 54
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 1, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 55
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 57
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 6, 
+    "Phase": 1, 
+    "Channel": 58
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 6, 
+    "Phase": 1, 
+    "Channel": 59
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 60
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 61
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 62
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 8, 
+    "Phase": 1, 
+    "Channel": 63
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 64
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 5, 
+    "Phase": 1, 
+    "Channel": 67
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 68
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 69
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 9, 
+    "Phase": 1, 
+    "Channel": 70
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 6, 
+    "Phase": 1, 
+    "Channel": 71
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 8, 
+    "Phase": 1, 
+    "Channel": 72
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 8, 
+    "Phase": 1, 
+    "Channel": 73
+  }, 
+  {
+    "GLIB": 2, 
+    "Shift": 2, 
+    "Invert": 0, 
+    "Increment": 7, 
+    "Phase": 1, 
+    "Channel": 74
+  }
+]
