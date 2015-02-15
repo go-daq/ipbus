@@ -25,7 +25,7 @@ func main() {
     nchans := flag.Int("nchans", 76, "Number of channels per GLIB.")
     nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
     store := flag.String("store", "", "Long term storage location.")
-    glibs := flag.String("glib", "GLIB", "Comma separated string of GLIB module names (e.g. 'GLIB1,GLIB2,GLIB5')")
+    glibs := flag.String("glib", "GLIB1,GLIB2,GLIB3,GLIB4,GLIB5", "Comma separated string of GLIB module names (e.g. 'GLIB1,GLIB2,GLIB5')")
     allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
     passfile := flag.String("pass", "pass.txt", "Email password file.")
     flag.Parse()

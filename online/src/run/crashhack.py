@@ -3,7 +3,7 @@ import os
 tmpdir = "/data/fast/runatbr2/run/"
 storage = "/data/fast/runatbr2/stoarge/"
 
-runcmd ="../../bin/run -allowmod -glib \"GLIB1,GLIB2,GLIB3,GLIB4\" -threshold 150 -duration 300 -nrun -1 -coincidence -dir %s -store %s" % (tmpdir, storage)
+runcmd ="../../bin/run -threshold 150 -duration 300 -nrun -1 -coincidence -dir %s -store %s" % (tmpdir, storage)
 while True:
     os.system(runcmd)
     files = os.listidr(tmpdir)
