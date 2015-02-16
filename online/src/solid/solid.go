@@ -467,6 +467,8 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     readout_stopped := uint32(7)
     nstopped0 := 0.0
     nstopped1 := 0.0
+    totalsize := 0.0
+    maxsize := uint32(0)
     ncycle := 0.0
     readoutticker := time.NewTicker(30 * time.Second)
     emptyticker := time.NewTicker(10000 * time.Second)
@@ -478,10 +480,13 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         case <-readoutticker.C:
             stoppedrate0 := nstopped0 / ncycle * 100.0
             stoppedrate1 := nstopped1 / ncycle * 100.0
-            fmt.Printf("GLIB%d: stopped %0.2f %%, %0.2f %%\n", r.hw.Num, stoppedrate0, stoppedrate1)
+            averagesize := totalsize / ncycle
+            fmt.Printf("GLIB%d: stopped %0.2f %%, %0.2f %%, average, max size = %0.2f, %d\n", r.hw.Num, stoppedrate0, stoppedrate1, averagesize, maxsize)
             nstopped0 = 0.0
             nstopped1 = 0.0
             ncycle = 0.0
+            totalsize = 0.0
+            maxsize = 0
         case stopped = <-r.Stop:
             fmt.Printf("GLIB%d: signal to stop.\n", r.hw.Num)
             emptyticker = time.NewTicker(15 * time.Second)
@@ -496,6 +501,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // sleep for period based upon Number of words ready to read
         // Read up to X words of data then read size
         p := ipbus.MakePacket(ipbus.Control)
+        stat.Read(&p)
         if bufferlen > 0 {
             nreq := 0
             if bufferlen >= 255 {
@@ -518,7 +524,6 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             //fmt.Printf("Read %d words total\n", nreq)
         }
         buffersize.Read(&p)
-        stat.Read(&p)
         timecontrol.Read(&p)
         trigctr.Read(1, &p)
         //fmt.Printf("Sending data/buffer len read packet.\n")
@@ -583,6 +588,10 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                 fmt.Printf("GLIB%d: buffer.count: %d -> %d\n", r.hw.Num, bufferlen, newlen)
             }
             bufferlen = newlen
+            totalsize += float64(newlen)
+            if newlen > maxsize {
+                maxsize = newlen
+            }
         } else {
             fmt.Printf("Did not get read of buffer.count, keeping bufferlen = %d\n", bufferlen)
         }
@@ -1131,7 +1140,8 @@ func (w Writer) Run(errs chan data.ErrPack) {
                     nwritten += n
                 }
                 //fmt.Println("Writing to disk...")
-                nbytes += float64(rr.RespIndex + rr.RespSize)
+                //nbytes += float64(rr.RespIndex + rr.RespSize)
+                nbytes += float64(nwritten)
                 latency := rr.Received.Sub(rr.Sent)
                 sumlatency += latency
                 npackets += 1

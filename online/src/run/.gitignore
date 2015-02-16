@@ -1,4 +1,5 @@
 *.json
 *.log
 SM1*
-out
+out*
+pass.txt

@@ -34,7 +34,7 @@ type packet struct {
 }
 
 func emptyPacket() packet {
-    d := make([]byte, 2048)
+    d := make([]byte, 1500)
     return packet{Data: d}
 }
 
@@ -178,6 +178,28 @@ func (h *HW) updatetimeout() {
     }
 }
 
+func (h *HW) handlelost() {
+    h.timedout.Stop()
+    fmt.Printf("Trying to handle a lost packet.\n")
+    status := ipbus.StatusPacket()
+    rc := make(chan data.ReqResp)
+    h.Send(status, rc)
+    rr := <-rc
+    statusreply := &ipbus.StatusResp{}
+    if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
+        panic(fmt.Errorf("Failed to parse status packet handling lost: %v", err))
+    }
+    fmt.Printf("Found status: %v\n", statusreply)
+    fmt.Printf("Received headers:\n")
+    for _, h := range statusreply.ReceivedHeaders {
+        fmt.Printf("    %v\n", h)
+    }
+    fmt.Printf("Sent headers:\n")
+    for _, h := range statusreply.OutgoingHeaders {
+        fmt.Printf("    %v\n", h)
+    }
+}
+
 // Get the device's status to set MTU and next ID.
 func (h *HW) ConfigDevice() {
 	defer h.exit.CleanExit("HW.ConfigDevice()")
@@ -222,6 +244,7 @@ func (h * HW) sendnext() error {
 }
 
 func (h *HW) sendpack(req request) error {
+    //fmt.Printf("Sending packet with ID = %d\n", req.reqresp.Out.ID)
     n, err := h.conn.Write(req.reqresp.Bytes[:req.reqresp.RespIndex])
     if err != nil {
         return fmt.Errorf("Failed after sending %d bytes: %v", n, err)
@@ -324,7 +347,8 @@ func (h *HW) Run() {
             }
         case <-h.timedout.C:
             // Handle timeout on oldest packet in flight
-            panic(fmt.Errorf("HW%d: lost a packet :(", h.Num))
+            fmt.Printf("HW%d: lost a packet :(\nSent ID log: %v\nqueued ID log: %v\nh.nextID = %d", h.Num, h.flyingids, h.queuedids, h.nextID)
+            go h.handlelost()
         }
     }
 }
