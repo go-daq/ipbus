@@ -579,9 +579,11 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         n := len(lengths)
         if n > 0 {
             newlen := lengths[n - 1][0]
+/*
             if newlen == 0 && readout_stopped == 3 {
                 fmt.Printf("GLIB%d: buffer.count: %d -> %d\n", r.hw.Num, bufferlen, newlen)
             }
+*/
             bufferlen = newlen
         } else {
             fmt.Printf("Did not get read of buffer.count, keeping bufferlen = %d\n", bufferlen)
