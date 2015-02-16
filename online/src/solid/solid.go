@@ -453,6 +453,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     if !ok {
         panic(fmt.Errorf("csr.stat word not found."))
     }
+/*
     timecontrol, ok := r.hw.Module.Modules["timing"].Registers["csr"].Words["ctrl"]
     if !ok {
         panic(fmt.Errorf("timing.csr.ctrl word not found."))
@@ -461,10 +462,10 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     if !ok {
         panic(fmt.Errorf("timing.trig_ctr register not found."))
     }
+*/
     //emptybufferdelay := 5 * time.Millisecond
     nempty := 0
-    ndata := 0
-    readout_stopped := uint32(7)
+    //readout_stopped := uint32(7)
     nstopped0 := 0.0
     nstopped1 := 0.0
     totalsize := 0.0
@@ -500,124 +501,70 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // Get replies from the read request, send data to writer's channel and
         // sleep for period based upon Number of words ready to read
         // Read up to X words of data then read size
-        p := ipbus.MakePacket(ipbus.Control)
-        stat.Read(&p)
-        if bufferlen > 0 {
-            nreq := 0
-            if bufferlen >= 255 {
-                //fmt.Println("Read 255 words.")
+        npacks := 0
+//        if bufferlen > 0 {
+//            fmt.Printf("Grabbing %d words.\n", bufferlen)
+//        }
+        for bufferlen > 0 {
+            p := ipbus.MakePacket(ipbus.Control)
+            if npacks == 0 {
+                stat.Read(&p)
+            }
+//            nread := uint32(0)
+            if bufferlen > 355 {
+                bufferdata.Read(255, &p)
+                bufferdata.Read(100, &p)
+                bufferlen -= 355
+//                nread = 355
+            } else if bufferlen > 255 {
                 bufferdata.Read(255, &p)
                 bufferlen -= 255
-                nreq += 255
-                if bufferlen >= 100 {
-                 //   fmt.Println("Read 100 mode words.")
-                    bufferdata.Read(100, &p)
-                    nreq += 100
-                } else {
-                }
-            } else { // < 255 words can go in one transaction
-                //fmt.Printf("Read %d words.\n", bufferlen)
                 bufferdata.Read(uint8(bufferlen), &p)
-                nreq += int(bufferlen)
+//                nread = 255 + bufferlen
+                bufferlen = 0
+                buffersize.Read(&p)
+            } else { // bufferlen < 255
+                bufferdata.Read(uint8(bufferlen), &p)
+//                nread = bufferlen
+                bufferlen = 0
+                buffersize.Read(&p)
             }
-            // Currently reducing the value a little from 108
-            //fmt.Printf("Read %d words total\n", nreq)
+//            fmt.Printf("Sending %dth packet reading %d words.\n", npacks, nread)
+            r.hw.Send(p, r.read)
+            npacks += 1
         }
-        buffersize.Read(&p)
-        timecontrol.Read(&p)
-        trigctr.Read(1, &p)
-        //fmt.Printf("Sending data/buffer len read packet.\n")
-        r.hw.Send(p, r.read)
-        data := <-r.read
-        if nempty == 300 {
-            //fmt.Printf("300 empty reads, sending a software trigger.\n")
-            //r.SendSoftwareTriggers(1)
+        if npacks == 0 {
+            p := ipbus.MakePacket(ipbus.Control)
+            stat.Read(&p)
+            buffersize.Read(&p)
+            npacks = 1
+            r.hw.Send(p, r.read)
+        //    fmt.Printf("Sending single packet with stat and and buffer.size read.\n")
         }
-        /*
-        if nempty > 0 && (nempty % 500 == 0) {
-            stats := stat.GetReads(data)
-            trigcnt := trigctr.GetReads(data)
-            if len(stats) > 0 {
-                fmt.Printf("GLIB%d %d empty buffer packets. csr.stat = 0x%08x, %d triggers\n", r.hw.Num, nempty, stats[0], trigcnt[0])
+        for ipack := 0; ipack < npacks; ipack++ {
+            data := <-r.read
+            if ipack == 0 { // First pack, get readout stopped state
                 ro_stop := stat.GetMaskedReads("ro_stop", data)[0]
-                if ro_stop > 0 {
-                    fmt.Printf("ro_stop = 0x%x\n", ro_stop)
-                    r.TrigStat()
-                    for i := uint32(0); i < 76; i++ {
-                        r.ChanStat(i)
-                    }
+                ncycle += 1
+                if ro_stop & 0x1 > 0 {
+                    nstopped0 += 1
                 }
-            } else {
-                fmt.Printf("GLIB%d %d empty buffer packets but no stat read.\n", r.hw.Num, nempty)
-            }
-            stats = timecontrol.GetReads(data)
-            if len(stats) > 0 {
-                fmt.Printf("GLIB%d %d empty buffer packets. timing.csr.ctrl = 0x%08x\n", r.hw.Num, nempty, stats[0])
-            } else {
-                fmt.Printf("GLIB%d %d empty buffer packets but no timing.csr.ctrl read.\n", r.hw.Num, nempty)
-            }
-        }
-        */
-        ro_stops := stat.GetMaskedReads("ro_stop", data)
-        if len(ro_stops) > 0 {
-            ro_stop := stat.GetMaskedReads("ro_stop", data)[0]
-            ncycle += 1
-            if ro_stop & 0x1 > 0 {
-                nstopped0 += 1
-            }
-            if ro_stop & 0x2 > 0 {
-                nstopped1 += 1
-            }
-            if ro_stop != readout_stopped {
-                //fmt.Printf("GLIB%d: ro_stop 0x%x -> 0x%x\n", r.hw.Num, readout_stopped, ro_stop)
-                /*
-                if ro_stop > 0 {
-                    r.TrigStat()
+                if ro_stop & 0x2 > 0 {
+                    nstopped1 += 1
                 }
-                */
             }
-            readout_stopped = ro_stop
-        } else {
-            fmt.Printf("GLIB%d: Didn't get any read of csr.stat.ro_stop.\n", r.hw.Num)
-        }
-        lengths := buffersize.GetReads(data)
-        n := len(lengths)
-        if n > 0 {
-            newlen := lengths[n - 1][0]
-            if newlen == 0 && readout_stopped == 3 {
-                fmt.Printf("GLIB%d: buffer.count: %d -> %d\n", r.hw.Num, bufferlen, newlen)
+            if ipack == npacks - 1 { // last pack, get buffer length
+                bufferlen = buffersize.GetReads(data)[0][0]
+                if bufferlen > 0 {
+                    nempty = 0
+                } else {
+                    nempty += 1
+                }
             }
-            bufferlen = newlen
-            totalsize += float64(newlen)
-            if newlen > maxsize {
-                maxsize = newlen
+            if nempty < 3 || bufferlen > 0 {
+                r.towrite <- data
             }
-        } else {
-            fmt.Printf("Did not get read of buffer.count, keeping bufferlen = %d\n", bufferlen)
-        }
-        //fmt.Printf("Received reply: %v\n", data)
-        if nempty < 3 || nempty % 100 == 0 {
-            r.towrite <- data
-        }
-        if bufferlen == 0 {
-            nempty += 1
-/*
-            if nempty == 1 {
-                fmt.Printf("1st empty after %d with data.\n", ndata)
-            }
-*/
-            ndata = 0
-            //fmt.Printf("Buffer empty, sleeping for %v\n", emptybufferdelay)
-            //time.Sleep(emptybufferdelay)
-        } else {
-            ndata += 1
-/*
-            if ndata == 1 {
-                fmt.Printf("1st with data [%d] after %d empty.\n", bufferlen, nempty)
-            }
-*/
-            nempty = 0
-            //fmt.Printf("lengths = %v\n", lengths)
+
         }
         if emptying && bufferlen == 0 {
             running = !r.CheckEmpty()
