@@ -9,7 +9,7 @@ opts, args = parser.parse_args()
 tmpdir = "/data/fast/runatbr2/run/"
 storage = "/data/fast/runatbr2/storage/"
 
-runcmd = "../../bin/run -threshold 150 -duration 300 -nrun -1 -coincidence -dir %s -store %s" % (tmpdir, storage)
+runcmd = "../../bin/run -threshold 170 -duration 300 -nrun -1 -coincidence -dir %s -store %s" % (tmpdir, storage)
 if opts.allowmod:
     runcmd += " -allowmod"
 while True:
