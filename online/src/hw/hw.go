@@ -152,6 +152,7 @@ type HW struct {
     reporttime time.Duration
     returnedids []uint16
     returnedindex, returnedsize int
+    stopped bool
 }
 
 func (h *HW) init() {
@@ -194,6 +195,7 @@ func (h *HW) updatetimeout() {
 }
 
 func (h *HW) handlelost() {
+    defer h.clean()
     h.timedout.Stop()
     fmt.Printf("Trying to handle a lost packet with id = %d = 0x%x.\n", h.timeoutid, h.timeoutid)
     fmt.Printf("Previously returned = %v, %d\n", h.returnedids, h.returnedindex)
@@ -239,11 +241,12 @@ func (h *HW) handlelost() {
     } else {
         fmt.Printf("Packet received but not sent, not sure what to do...\n")
     }
+    panic(fmt.Errorf("Just panic when a packet is lost."))
 }
 
 // Get the device's status to set MTU and next ID.
 func (h *HW) ConfigDevice() {
-	defer h.exit.CleanExit("HW.ConfigDevice()")
+	defer h.clean()
 	status := ipbus.StatusPacket()
 	rc := make(chan data.ReqResp)
 	h.Send(status, rc)
@@ -318,8 +321,20 @@ func (h * HW) returnreply() {
     }
 }
 
+func (h *HW) clean() {
+    h.stopped = true
+    if r := recover(); r != nil {
+        if err, ok := r.(error); ok {
+            fmt.Printf("HW%d caught panic.\n", h.Num)
+            ep := data.MakeErrPack(err)
+            h.errs <- ep
+        }
+    }
+}
+
 // NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
 func (h *HW) Run() {
+    defer h.clean()
     if err := h.config(); err != nil {
         panic(err)
     }
@@ -434,6 +449,9 @@ func (h *HW) nextid() uint16 {
 }
 
 func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
+    if h.stopped {
+        return fmt.Errorf("HW%d is stopped.", h.Num)
+    }
     rr := data.CreateReqResp(p)
     req := request{request: p, reqresp: rr, dest: outp}
     h.incoming <- req
@@ -491,6 +509,7 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 
 // Receive incoming packets
 func (h *HW) receive() {
+    defer h.clean()
     running := true
     for running {
         p := emptyPacket()
