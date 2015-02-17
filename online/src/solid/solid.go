@@ -187,34 +187,18 @@ func (r *Reader) DisableReadout() {
     stat := r.hw.Module.Registers["csr"].Words["stat"]
     for _, ch := range r.channels {
         p := ipbus.MakePacket(ipbus.Control)
-        fmt.Printf("Selecting channel %d\n", ch)
         ctrl.MaskedWrite("chan_sel", ch, &p)
         ctrl.Read(&p)
         stat.Read(&p)
         chanctrl.Read(&p)
-        fmt.Printf("Disabling readout.\n")
         chanctrl.MaskedWrite("ro_en", 0, &p)
         stat.Read(&p)
         r.hw.Send(p, reply)
         rr := <-reply
-        ctrls := stat.GetReads(rr)
-        if len(ctrls) > 0 {
-            fmt.Printf("csr.stat = %x\n", ctrls)
-        }
         r.towrite <- rr
     }
-    /*
-    for _, ch := range r.triggerchannels {
-        p := ipbus.MakePacket(ipbus.Control)
-        ctrl.MaskedWrite("chan_sel", ch, &p)
-        chanctrl.MaskedWrite("ro_en", 0, &p)
-        r.hw.Send(p, reply)
-        rr := <-reply
-        r.towrite <- rr
-    }
-    */
+}
 
-    }
 // Initially enable all data and trigger channels
 func (r *Reader) EnableReadoutChannels() {
     fmt.Printf("Enabling readout on data and trigger channels: %v, %v\n", r.channels, r.triggerchannels)
@@ -469,6 +453,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     nstopped0 := 0.0
     nstopped1 := 0.0
     totalsize := 0.0
+    sizecount := 0.0
     maxsize := uint32(0)
     ncycle := 0.0
     readoutticker := time.NewTicker(30 * time.Second)
@@ -481,12 +466,13 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         case <-readoutticker.C:
             stoppedrate0 := nstopped0 / ncycle * 100.0
             stoppedrate1 := nstopped1 / ncycle * 100.0
-            averagesize := totalsize / ncycle
+            averagesize := totalsize / sizecount
             fmt.Printf("GLIB%d: stopped %0.2f %%, %0.2f %%, average, max size = %0.2f, %d\n", r.hw.Num, stoppedrate0, stoppedrate1, averagesize, maxsize)
             nstopped0 = 0.0
             nstopped1 = 0.0
             ncycle = 0.0
             totalsize = 0.0
+            sizecount = 0.0
             maxsize = 0
         case stopped = <-r.Stop:
             fmt.Printf("GLIB%d: signal to stop.\n", r.hw.Num)
@@ -502,6 +488,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
         // sleep for period based upon Number of words ready to read
         // Read up to X words of data then read size
         npacks := 0
+        nwords := uint32(0)
 //        if bufferlen > 0 {
 //            fmt.Printf("Grabbing %d words.\n", bufferlen)
 //        }
@@ -515,15 +502,18 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                 bufferdata.Read(255, &p)
                 bufferdata.Read(100, &p)
                 bufferlen -= 355
+                nwords = 355
 //                nread = 355
             } else if bufferlen > 255 {
                 bufferdata.Read(255, &p)
                 bufferlen -= 255
                 bufferdata.Read(uint8(bufferlen), &p)
 //                nread = 255 + bufferlen
+                nwords = 255 + bufferlen
                 bufferlen = 0
                 buffersize.Read(&p)
             } else { // bufferlen < 255
+                nwords = bufferlen
                 bufferdata.Read(uint8(bufferlen), &p)
 //                nread = bufferlen
                 bufferlen = 0
@@ -559,6 +549,13 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                     nempty = 0
                 } else {
                     nempty += 1
+                }
+                if nwords > 0 {
+                    totalsize += float64(bufferlen)
+                    sizecount += 1.0
+                    if bufferlen > maxsize {
+                        maxsize = bufferlen
+                    }
                 }
             }
             if nempty < 3 || bufferlen > 0 {

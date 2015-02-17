@@ -57,7 +57,7 @@ func New(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs c
 		panic(err)
 	}
 	hw := HW{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), exit: exit, errs: errs,
-    Module: mod, inflight:0, maxflight: 1}
+    Module: mod, inflight:0, maxflight: 4, reporttime: 30 * time.Second}
 	hw.init()
 	fmt.Printf("Created new HW: %v\n", hw)
 	return &hw
@@ -94,6 +94,11 @@ func (i * idlog) oldest() (uint16, bool) {
     return i.ids[i.first], i.n > 0
 }
 
+func (i * idlog) secondoldest() (uint16, bool) {
+    next := (i.first + 1) % i.max
+    return i.ids[next], i.n > 1
+}
+
 func (i * idlog) newest() (uint16, bool) {
     newest := (i.first + i.n) % i.max
     return i.ids[newest], i.n > 0
@@ -128,7 +133,7 @@ type HW struct {
 	configured bool              // Flag to ensure connection is configured, etc. before
 	// attempting to send data.
 	// is assumed to be lost and handled as such.
-	nextID uint16 // The packet ID expected next by the hardware.
+	nextID, timeoutid uint16 // The packet ID expected next by the hardware.
 	mtu    uint32 // The Maxmimum transmission unit is not currently used,
 	// but defines the largest packet size (in bytes) to be
 	// sent. It is the HW interface's responsibility to
@@ -142,6 +147,11 @@ type HW struct {
     timedout * time.Ticker
     incoming chan request
     waittime time.Duration
+    nverbose int
+    bytessent, bytesreceived float64
+    reporttime time.Duration
+    returnedids []uint16
+    returnedindex, returnedsize int
 }
 
 func (h *HW) init() {
@@ -153,6 +163,9 @@ func (h *HW) init() {
     h.flyingids = newIDLog(32)
     h.timedout = time.NewTicker(10000 * time.Second)
     h.incoming = make(chan request, 100)
+    h.returnedsize = 32
+    h.returnedindex = 31
+    h.returnedids = make([]uint16, h.returnedsize)
 }
 
 func (h HW) String() string {
@@ -170,17 +183,20 @@ func (h *HW) config() error {
 
 func (h *HW) updatetimeout() {
     if h.inflight > 0 {
-        first, ok := h.flyingids.oldest()
+        first, ok := h.flyingids.secondoldest()
         if ok {
-            dt := h.waittime - time.Since(h.flying[first].sent)
+            dt := h.waittime - time.Since(h.flying[first].reqresp.Sent)
+            //fmt.Printf("update timeout = %v, wait time = %d, %v since sent at %v\n", dt, h.waittime, h.flying[first].reqresp.Sent)
             h.timedout = time.NewTicker(dt)
+            h.timeoutid = first
         }
     }
 }
 
 func (h *HW) handlelost() {
     h.timedout.Stop()
-    fmt.Printf("Trying to handle a lost packet.\n")
+    fmt.Printf("Trying to handle a lost packet with id = %d = 0x%x.\n", h.timeoutid, h.timeoutid)
+    fmt.Printf("Previously returned = %v, %d\n", h.returnedids, h.returnedindex)
     status := ipbus.StatusPacket()
     rc := make(chan data.ReqResp)
     h.Send(status, rc)
@@ -191,12 +207,37 @@ func (h *HW) handlelost() {
     }
     fmt.Printf("Found status: %v\n", statusreply)
     fmt.Printf("Received headers:\n")
-    for _, h := range statusreply.ReceivedHeaders {
-        fmt.Printf("    %v\n", h)
+    packetreceived := false
+    packetsent := false
+    for _, rh := range statusreply.ReceivedHeaders {
+        if rh.ID == h.timeoutid {
+            packetreceived = true
+            fmt.Printf("    lost packet: %v!\n", rh)
+        } else {
+            fmt.Printf("    %v\n", rh)
+        }
     }
     fmt.Printf("Sent headers:\n")
-    for _, h := range statusreply.OutgoingHeaders {
-        fmt.Printf("    %v\n", h)
+    for _, sh := range statusreply.OutgoingHeaders {
+        if sh.ID == h.timeoutid {
+            packetsent = true
+            fmt.Printf("    lost packet: %v!\n", sh)
+        } else {
+            fmt.Printf("    %v\n", sh)
+        }
+    }
+    if packetsent {
+        fmt.Printf("Packet sent, need to send resend request.\n")
+        resendpack := ipbus.ResendPacket(h.timeoutid)
+        fake := make(chan data.ReqResp)
+        h.nverbose = 5
+        fmt.Printf("Sending resend request: %v\n", resendpack)
+        h.Send(resendpack, fake)
+        h.timedout = time.NewTicker(h.waittime)
+    } else if !packetreceived {
+        fmt.Printf("Packet not received, need to resend original packet (and any following ones).\n")
+    } else {
+        fmt.Printf("Packet received but not sent, not sure what to do...\n")
     }
 }
 
@@ -238,6 +279,7 @@ func (h * HW) sendnext() error {
         h.inflight += 1
         if h.inflight == 1 {
             h.timedout = time.NewTicker(h.waittime)
+            h.timeoutid = first
         }
     }
     return err
@@ -245,7 +287,11 @@ func (h * HW) sendnext() error {
 
 func (h *HW) sendpack(req request) error {
     //fmt.Printf("Sending packet with ID = %d\n", req.reqresp.Out.ID)
+    if h.nverbose > 0 {
+        fmt.Printf("Sending request: %v, 0x%x\n", req, req.reqresp.Bytes[:req.reqresp.RespIndex])
+    }
     n, err := h.conn.Write(req.reqresp.Bytes[:req.reqresp.RespIndex])
+    h.bytessent += float64(n)
     if err != nil {
         return fmt.Errorf("Failed after sending %d bytes: %v", n, err)
     }
@@ -266,6 +312,8 @@ func (h * HW) returnreply() {
             delete(h.replied, first)
             p.dest <- p.reqresp
             sentrep = true
+            h.returnedindex = (h.returnedindex + 1) % h.returnedsize
+            h.returnedids[h.returnedindex] = first
         }
     }
 }
@@ -278,6 +326,7 @@ func (h *HW) Run() {
     go h.ConfigDevice()
     running := true
     go h.receive()
+    reportticker := time.NewTicker(h.reporttime)
     for running {
         select {
         case req := <-h.incoming:
@@ -290,6 +339,12 @@ func (h *HW) Run() {
                 req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
                 h.sendpack(req)
                 h.flying[0] = req
+            } else if req.reqresp.Out.Type == ipbus.Resend {
+                if err := req.reqresp.EncodeOut(); err != nil {
+                    panic(fmt.Errorf("HW%d: %v", h.Num, err))
+                }
+                req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
+                h.sendpack(req)
             } else {
                 req.reqresp.Out.ID = h.nextid()
                 if err := req.reqresp.EncodeOut(); err != nil {
@@ -311,6 +366,10 @@ func (h *HW) Run() {
             // Update ticker
             id := uint16(rep.Data[1]) << 8
             id |= uint16(rep.Data[2])
+            if h.nverbose > 0 {
+                fmt.Printf("Received packet with ID = %d = 0x%x\n", id, id)
+                h.nverbose -= 1
+            }
             if id == 0 {
                 if req, ok := h.flying[id]; ok {
                     delete(h.flying, id)
@@ -349,212 +408,15 @@ func (h *HW) Run() {
             // Handle timeout on oldest packet in flight
             fmt.Printf("HW%d: lost a packet :(\nSent ID log: %v\nqueued ID log: %v\nh.nextID = %d", h.Num, h.flyingids, h.queuedids, h.nextID)
             go h.handlelost()
+        case <-reportticker.C:
+            sentrate := h.bytessent / h.reporttime.Seconds() / 1e6
+            recvrate := h.bytesreceived / h.reporttime.Seconds() / 1e6
+            fmt.Printf("HW%d sent = %0.2f MB/s, received = %0.2f MB/s\n", h.Num, sentrate, recvrate)
+            h.bytessent = 0.0
+            h.bytesreceived = 0.0
         }
     }
 }
-/*
- * Continuously send queued packets, handle lost responses and put the
- * responses into user provided channels. Keep running until the h.send
- * channel is closed.
- */
-/*
-func (h *HW) Run() {
-	defer h.exit.CleanExit("HW.Run()")
-	if !h.configured {
-		if err := h.config(); err != nil {
-			panic(err)
-		}
-		go h.ConfigDevice()
-	}
-	running := true
-    lastreceived := uint16(0)
-	ntimeout := 0
-	for running {
-		//fmt.Printf("HW %v: expecting info from chan at %p\n", h, &h.tosend)
-		p, ok := <-h.tosend
-		if !ok {
-			running = false
-			break
-		}
-		//fmt.Printf("HW%d: Received packet send, chan map = %v\n", h.Num, h.outps)
-		// Send packet
-		rr, err := h.send(p, false)
-		if err != nil {
-			panic(err)
-		}
-		go h.receive(rr)
-		received := false
-		timedout := false
-		lost := &data.ReqResp{}
-		for running && !received {
-			tick := time.NewTicker(h.timeout)
-			select {
-			case reply := <-h.replies:
-				forwardreply := true
-				if reply.In.Type == ipbus.Status {
-					fmt.Printf("HW%d: Received a Status reply.\n", h.Num)
-					if timedout {
-						fmt.Printf("HW%d: Expected a status reply because %v was lost.\n", h.Num, lost)
-                        fmt.Printf("HW%d: last received ID = %d = 0x%08x.\n", h.Num, lastreceived, lastreceived)
-						forwardreply = false
-						// Check whether the lost packet was received. If it
-						// was then request the reply again. Otherwise send
-						// the original request again.
-						statusreply := ipbus.StatusResp{}
-						if err := statusreply.Parse(reply.Bytes[reply.RespIndex:]); err != nil {
-							panic(err)
-						}
-                        h.nextid = uint16(statusreply.Next)
-						if lost.Out.Version != ipbus.Version {
-							panic(fmt.Errorf("HW%d: Trying to handle invalid lost packet: %v", h.Num, lost))
-						}
-						reqreceived := false
-						replysent := false
-						for _, head := range statusreply.ReceivedHeaders {
-							if head.ID == lost.Out.ID {
-								reqreceived = true
-							}
-						}
-						for _, head := range statusreply.OutgoingHeaders {
-							if head.ID == lost.Out.ID {
-								replysent = true
-							}
-						}
-						if replysent {
-							p := ipbus.ResendPacket(lost.Out.ID)
-							fmt.Printf("HW%d: Lost package was sent, requesting resend: %v.\n", h.Num, p)
-							resentreqresp, err := h.send(p, true)
-							if err != nil {
-								panic(err)
-							}
-							fmt.Printf("HW%d: sent request %v\n", h.Num, resentreqresp)
-							lost.ClearReply()
-							go h.receive(*lost)
-						}
-						if !reqreceived {
-							fmt.Printf("HW%d: Lost package wasn't received :(, resending at %v.\n", h.Num, time.Now())
-                            fmt.Printf("Setting packet ID = %d = 0x%x\n", h.nextid, h.nextid)
-                            oldid := lost.Out.ID
-                            newid := h.nextid
-                            fmt.Printf("Cleaning up reply channel map.\nGetting reply channel for old ID = %d\n", oldid)
-                            req := getchan(oldid)
-                            h.outps.read <- req
-                            rep := <-req.rep
-                            fmt.Printf("resp = %v\n", rep)
-                            if rep.ok {
-                                ch := rep.c
-                                fmt.Printf("Got channel for old ID, removing channel with ID = %d\n", oldid)
-                                req = remchan(oldid)
-                                h.outps.remove <- req
-                                rep = <-req.rep
-                                if rep.err != nil {
-                                    panic(err)
-                                }
-                                fmt.Printf("Removing channel with new ID = %d\n", newid)
-                                req = remchan(newid)
-                                h.outps.remove <- req
-                                rep = <-req.rep
-                                if rep.err != nil {
-                                    fmt.Printf("Err = %v\n", rep.err)
-                                }
-                                fmt.Printf("resp = %v\n", rep)
-                                fmt.Printf("Removed old channel, adding channel with new ID = %d\n", newid)
-                                req = addchan(newid, ch)
-                                h.outps.add <- req
-                                rep = <-req.rep
-                                if rep.err != nil {
-                                    panic(rep.err)
-                                }
-                                fmt.Printf("resp = %v\n", rep)
-                            } else {
-                                panic(fmt.Errorf("Failed updating output channel %d -> %d", oldid, newid))
-                            }
-                            fmt.Printf("Finished cleaning up chanmap.\n")
-                            lost.Out.ID = newid
-                            h.nextid += 1
-                            fmt.Printf("Lost ID = %d = 0x%x\n", lost.Out.ID, lost.Out.ID)
-							resentreqresp, err := h.send(lost.Out, true)
-							if err != nil {
-								panic(err)
-							}
-							fmt.Printf("HW%d: resent %v\n", h.Num, resentreqresp)
-							go h.receive(*lost)
-						}
-					} else {
-						// If the request was a status then that is fine. If
-						// not then I must have sent a status request earlier
-						// but received the original reply before the status
-						// response, so the status response was received into
-						// an unrelated ReqResp.
-						fmt.Printf("HW%d: Wasn't expecting status.\n", h.Num)
-						if reply.Out.Type != ipbus.Status {
-							fmt.Printf("HW%d: Status in reply to %v\n", h.Num, reply.Out)
-							forwardreply = false
-							// Since the status request is unrelated clear the
-							// reply bytes and tell it to receive again.
-							reply.ClearReply()
-							go h.receive(reply)
-						}
-
-					}
-
-				}
-				if forwardreply {
-					// Send reply to the correct channel
-					id := reply.Out.ID
-                    lastreceived = id
-					//fmt.Printf("Sending reply to originator: %d of %v\n", id, h.outps)
-					req := getchan(id)
-					h.outps.read <- req
-					rep := <-req.rep
-					if rep.ok {
-						rep.c <- reply
-						received = true
-					} else {
-						fmt.Printf("HW%d WARNING: No channel %d in %v to send reply.\nRecent: %v\n", h.Num, id, h.outps, h.recent)
-					}
-					h.recent[h.irecent%len(h.recent)] = p.ID
-					h.irecent += 1
-					if timedout {
-						fmt.Printf("HW%d: Handled a lost packet: %v\n", h.Num, reply)
-						ntimeout = 0
-					}
-				}
-			case now := <-tick.C:
-				// handle timed out request
-                h.nverbose = 5
-				ntimeout += 1
-				if ntimeout > 10 {
-					running = false
-					panic(fmt.Errorf("HW%d: %d lost packets in a row.", h.Num, ntimeout))
-				}
-				fmt.Printf("HW%d: Transaction %v timed out %v at %v\n", h.Num, rr, h.timeout, now)
-				timedout = true
-				lost = &rr
-				statusreq := ipbus.StatusPacket()
-				h.send(statusreq, false)
-			case errp := <-h.errs:
-				running = false
-				fmt.Printf("HW.Run() noticed a panic, stopping.\n")
-				h.errs <- errp
-			}
-			tick.Stop()
-		}
-		if received {
-            if h.nverbose > 0 {
-                fmt.Printf("HW%d: removing chanmap entry for packet ID = %d\n", rr.Out.ID)
-            }
-			// Remove the channel from the output map
-			req := remchan(rr.Out.ID)
-			h.outps.remove <- req
-			rep := <-req.rep
-			if rep.err != nil {
-				panic(rep.err)
-			}
-		}
-	}
-}
-*/
 
 /*
    When a user wants to send a packet they also provide a channel
@@ -633,8 +495,12 @@ func (h *HW) receive() {
     for running {
         p := emptyPacket()
         n, addr, err := h.conn.ReadFrom(p.Data)
+        h.bytesreceived += float64(n)
         if err != nil {
             panic(fmt.Errorf("HW%d read %d bytes from %v: %v\n", h.Num, n, addr, err))
+        }
+        if h.nverbose > 0 {
+            fmt.Printf("Received a packet of %d bytes.\n", n)
         }
         p.Data = p.Data[:n]
         p.RAddr = addr
@@ -642,129 +508,3 @@ func (h *HW) receive() {
     }
 
 }
-/*
-func (h * HW) receive(rr data.ReqResp) {
-    msg := fmt.Sprintf("HW.receive() on HW%d", h.Num)
-	defer h.exit.CleanExit(msg)
-	// Write data into buffer from UDP read, timestamp reply and set raddr
-	n, addr, err := h.conn.ReadFrom(rr.Bytes[rr.RespIndex:])
-	rr.Bytes = rr.Bytes[:rr.RespIndex+n]
-	rr.RespSize = n
-	if err != nil {
-		panic(err)
-	}
-	rr.Received = time.Now()
-	if err := rr.Decode(); err != nil {
-		panic(err)
-	}
-    if h.nverbose > 0 {
-        fmt.Printf("HW%d: Received packet with ID = %d = 0x%x\n", h.Num, rr.In.ID, rr.In.ID)
-        h.nverbose -= 1
-    }
-	if rr.In.ID != rr.Out.ID {
-		if rr.In.Type != ipbus.Status {
-			panic(fmt.Errorf("Received an unexpected packet ID: %d -> %d", rr.Out.ID, rr.In.ID))
-		}
-	}
-	rr.RAddr = addr
-	// Send data.ReqResp containing the buffer into replies
-	h.replies <- rr
-}
-*/
-
-/*
-type chanmapitem struct {
-	id  uint16
-	c   chan data.ReqResp
-	ok  bool
-	err error
-}
-
-type chanmapreq struct {
-	val chanmapitem
-	rep chan chanmapitem
-}
-
-func getchan(id uint16) chanmapreq {
-	val := chanmapitem{id: id}
-	rep := make(chan chanmapitem)
-	return chanmapreq{val, rep}
-}
-
-func remchan(id uint16) chanmapreq {
-	return getchan(id)
-}
-
-func addchan(id uint16, c chan data.ReqResp) chanmapreq {
-	val := chanmapitem{id: id, c: c}
-	rep := make(chan chanmapitem)
-	return chanmapreq{val, rep}
-}
-
-
-type chanmap struct {
-	m                 []chan data.ReqResp
-	exists            []bool
-	add, remove, read chan chanmapreq
-}
-
-func (cm *chanmap) movechan(oldid, newid uint16) {
-    cm.exists[oldid] = false
-    ch := cm.m[oldid]
-    cm.m[newid] = ch
-    cm.exists[newid] = true
-}
-
-func newchanmap() chanmap {
-	return chanmap{
-		m:      make([]chan data.ReqResp, 65536),
-		exists: make([]bool, 65536),
-		add:    make(chan chanmapreq),
-		remove: make(chan chanmapreq),
-		read:   make(chan chanmapreq),
-	}
-}
-
-func (m *chanmap) run() {
-	running := true
-	for running {
-		select {
-		case req, open := <-m.add:
-			if !open {
-				running = false
-				break
-			}
-			err := error(nil)
-			if m.exists[req.val.id] {
-				err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
-			}
-			m.m[req.val.id] = req.val.c
-			m.exists[req.val.id] = true
-//			   if _, ok := m.m[req.val.id]; ok {
-//			       err = fmt.Errorf("Adding existing channel %d to map %v", req.val.id, m.m)
-//			   }
-//			   m.m[req.val.id] = req.val.c
-			req.val.err = err
-			req.rep <- req.val
-		case req := <-m.remove:
-			err := error(nil)
-			if !m.exists[req.val.id] {
-				err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
-			}
-			m.exists[req.val.id] = false
-//			   if _, ok := m.m[req.val.id]; !ok {
-//			       err = fmt.Errorf("Attempt to remove non-existing channel %d to map %v", req.val.id, m.m)
-//			   } else {
-//			       delete(m.m, req.val.id)
-//			   }
-			req.val.err = err
-			req.rep <- req.val
-		case req := <-m.read:
-			req.val.ok = m.exists[req.val.id]
-			req.val.c = m.m[req.val.id]
-//			   req.val.c, req.val.ok = m.m[req.val.id]
-			req.rep <- req.val
-		}
-	}
-}
-*/
