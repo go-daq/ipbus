@@ -13,7 +13,6 @@ func Load(module int) Glib {
     pedspafn := fmt.Sprintf("pedspa_GLIB%d.json", module)
     maskfn := fmt.Sprintf("masks_GLIB%d.json", module)
     return NewGLIB(module, alignmentfn, pedspafn, maskfn)
-
 }
 
 func NewGLIB(module int, alignmentfn, pedspafn, maskfn string) Glib {
@@ -82,9 +81,14 @@ type Glib struct {
     TriggerChannels []uint32
 }
 
-func (g Glib) SetThresholds(thr uint32) {
+func (g Glib) SetThresholds(thr, muthr uint32) {
     for _, ch := range g.DataChannels {
-        ch.SetThreshold(thr)
+        if ch.MuonPanel {
+            fmt.Printf("Setting muon veto panel threshold on %v\n", ch)
+            ch.SetThreshold(muthr)
+        } else {
+            ch.SetThreshold(thr)
+        }
     }
 }
 
@@ -110,6 +114,7 @@ type DataChannel struct {
     Shift, Increment uint32
     Pedestal, SPA float64
     Threshold uint32
+    MuonPanel bool
 }
 
 func (d DataChannel) String() string {
@@ -134,6 +139,7 @@ func (dc *DataChannel) merge(offset TimingOffset, pedspa PedSPA, masks Masks) er
     }
     dc.Pedestal = pedspa.Pedestal
     dc.SPA = pedspa.SinglePixelAmplitude
+    dc.MuonPanel = pedspa.MuonPanel
     dc.ReadoutEnabled = true
     dc.TriggerEnabled = true
     for _, ch := range masks.ReadoutDisabled {
@@ -174,6 +180,7 @@ type Masks struct {
 type PedSPA struct {
     ChanID
     Pedestal, SinglePixelAmplitude float64
+    MuonPanel bool
 }
 
 type TimingOffset struct {

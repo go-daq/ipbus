@@ -311,8 +311,8 @@ func (r *Reader) SetCoincidenceMode(mode bool) {
     r.towrite <- rr
 }
 
-func (r *Reader) StartSelfTriggers(thr uint32) {
-    r.cfg.SetThresholds(thr)
+func (r *Reader) StartSelfTriggers(thr, muthr uint32) {
+    r.cfg.SetThresholds(thr, muthr)
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
@@ -476,7 +476,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             maxsize = 0
         case stopped = <-r.Stop:
             fmt.Printf("GLIB%d: signal to stop.\n", r.hw.Num)
-            emptyticker = time.NewTicker(15 * time.Second)
+            emptyticker = time.NewTicker(30 * time.Second)
             emptying = true
         case <-emptyticker.C:
             fmt.Printf("GLIB%d: giving up on emptying buffers.\n", r.hw.Num)
@@ -558,10 +558,6 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                     }
                 }
             }
-            if nempty < 3 || bufferlen > 0 {
-                r.towrite <- data
-            }
-
         }
         if emptying && bufferlen == 0 {
             running = !r.CheckEmpty()
@@ -1435,7 +1431,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         reader.Reset(c.nuke)
         reader.TrigStat()
         reader.Align()
-        reader.TriggerWindow(0xff, 0x2f)
+        reader.TriggerWindow(0xff, 0x19)
         reader.SetCoincidenceMode(r.Coincidence)
     }
     // Enable readout channels
@@ -1447,7 +1443,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     if r.Threshold > 0 {
         fmt.Printf("Setting threshold triggers.\n")
         for _, reader := range c.readers {
-            reader.StartSelfTriggers(uint32(r.Threshold))
+            reader.StartSelfTriggers(uint32(r.Threshold), uint32(r.MuThreshold))
         }
     }
     // Synchronise GLIBs or reset buffer

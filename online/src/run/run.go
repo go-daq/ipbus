@@ -7,6 +7,7 @@ import (
     "flag"
     "fmt"
     "mail"
+    "os/user"
     "solid"
     "strings"
     "runtime"
@@ -20,14 +21,29 @@ func main() {
     coincidence := flag.Bool("coincidence", false, "require vertical/horizonatal coincidence to trigger.")
     duration := flag.Int("duration", 30, "Length o run [s]")
     threshold := flag.Int("threshold", -1, "Trigger threshold [ADC count above pedestal")
+    muthreshold := flag.Int("muthreshold", 400, "Muon panel trigger threshold [ADC count above pedestal")
     randrate := flag.Float64("randrate", -1.0, "Random trigger rate [Hz]")
     nchans := flag.Int("nchans", 76, "Number of channels per GLIB.")
     nruns := flag.Int("nrun", 1, "Number of runs to perform [-ve implies infinite].")
     store := flag.String("store", "", "Long term storage location.")
-    glibs := flag.String("glib", "GLIB", "Comma separated string of GLIB module names (e.g. 'GLIB1,GLIB2,GLIB5')")
+    glibs := flag.String("glib", "GLIB1,GLIB2,GLIB3,GLIB4,GLIB5", "Comma separated string of GLIB module names (e.g. 'GLIB1,GLIB2,GLIB5')")
     allowmod := flag.Bool("allowmod", false, "Allow running even if code modified.")
     passfile := flag.String("pass", "pass.txt", "Email password file.")
     flag.Parse()
+    modallowed := *allowmod
+    if modallowed {
+        currentuser, err := user.Current()
+        fmt.Printf("Allowing run with modifications requested by %v [%s]\n", currentuser, currentuser.Username)
+        if err != nil {
+            modallowed = false
+            fmt.Printf("Unable to get current user, cannot allow modifications.\n")
+        } else {
+            if currentuser.Username != "ryder" {
+                modallowed = false
+                fmt.Printf("Only Nick Ryder can run with local modifications.\n")
+            }
+        }
+    }
     if *nchans != 38 && *nchans != 76 {
         panic(fmt.Errorf("Cannot have %d GLIB channels. Must be 38 or 76.", *nchans))
     }
@@ -121,11 +137,11 @@ func main() {
             fn += "nocoinc_"
         }
         fn += *name
-        r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *randrate, *coincidence)
+        r, err := data.NewRun(uint32(irun), fn, dt, *threshold, *muthreshold, *randrate, *coincidence)
         if err != nil {
             panic(err)
         }
-        if r.Commit.Modified && !(*allowmod) {
+        if r.Commit.Modified && !(modallowed) {
             panic(fmt.Errorf("Code has local modifications: %v\n", r.Commit))
         }
         quit, errp := control.Run(r)
