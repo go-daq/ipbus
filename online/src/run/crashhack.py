@@ -10,7 +10,7 @@ opts, args = parser.parse_args()
 tmpdir = "/data/fast/runatbr2/run/"
 storage = "/data/fast/runatbr2/storage/"
 
-runcmd = "../../bin/run -threshold %d -duration 300 -nrun -1 -coincidence -dir %s -store %s" % (opts.threshold, tmpdir, storage)
+runcmd = "../../bin/run -threshold %d -duration 300 -nrun -1 -coincidence -dir %s -store %s -name antinu" % (opts.threshold, tmpdir, storage)
 if opts.allowmod:
     runcmd += " -allowmod"
 while True:
