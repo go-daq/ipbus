@@ -141,6 +141,7 @@ func main() {
         if err != nil {
             panic(err)
         }
+        fmt.Printf("Muon veto threshold = %d\n", r.MuThreshold)
         if r.Commit.Modified && !(modallowed) {
             panic(fmt.Errorf("Code has local modifications: %v\n", r.Commit))
         }
