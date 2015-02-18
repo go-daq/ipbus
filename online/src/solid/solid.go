@@ -1427,7 +1427,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     fmt.Printf("Starting random triggers.\n")
     randrate := r.Rate
     if r.Threshold > 0 {
-        randrate = 0.1
+        randrate = 1.0
     }
     if !c.internaltrigger {
         c.clock.RandomRate(randrate)
