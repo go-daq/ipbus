@@ -7,6 +7,7 @@ import (
     "flag"
     "fmt"
     "mail"
+    "os"
     "os/user"
     "solid"
     "strings"
@@ -32,17 +33,29 @@ func main() {
     flag.Parse()
     modallowed := *allowmod
     if modallowed {
+        modallowed = false
         currentuser, err := user.Current()
-        fmt.Printf("Allowing run with modifications requested by %v [%s]\n", currentuser, currentuser.Username)
+        fmt.Printf("Run with modifications requested by %v [%s]\n", currentuser, currentuser.Username)
         if err != nil {
             modallowed = false
             fmt.Printf("Unable to get current user, cannot allow modifications.\n")
         } else {
-            if currentuser.Username != "ryder" {
-                modallowed = false
-                fmt.Printf("Only Nick Ryder can run with local modifications.\n")
+            if currentuser.Username == "ryder" {
+                modallowed = true
             }
         }
+        host, err := os.Hostname()
+        if err == nil {
+            fmt.Printf("Found hostname: %s\n", host)
+            if host == "nova.phy.bris.ac.uk" {
+                modallowed = true
+            }
+        } else {
+            fmt.Printf("Error getting hostname: %v\n", err)
+        }
+    }
+    if *allowmod && !modallowed {
+        fmt.Printf("Only Nick can run with local modifications.\n")
     }
     if *nchans != 38 && *nchans != 76 {
         panic(fmt.Errorf("Cannot have %d GLIB channels. Must be 38 or 76.", *nchans))
@@ -110,20 +123,20 @@ func main() {
     }
     runtime.GOMAXPROCS(6)
     fmt.Println("Solid's SM1 online DAQ software!")
-    control := solid.New(*dir, *store, channels, &exit, internaltrigger, *nuke)
-    for _, mod := range mods {
-        control.AddFPGA(mod)
-    }
-    errp := control.Start()
-    if errp.Err != nil {
-
-        fmt.Printf("Error in Start(): %v\n", errp)
-        e.Log("Error in start:", errp)
-        return
-    }
     irun := 0
     dt := time.Duration(*duration) * time.Second
     for *nruns < 0 || irun < *nruns {
+        control := solid.New(*dir, *store, channels, &exit, internaltrigger, *nuke)
+        for _, mod := range mods {
+            control.AddFPGA(mod)
+        }
+        errp := control.Start()
+        if errp.Err != nil {
+
+            fmt.Printf("Error in Start(): %v\n", errp)
+            e.Log("Error in start:", errp)
+            return
+        }
         fmt.Printf("Making %dth run.\n", irun)
         fn := "triggered_"
         if *threshold < 0 {
@@ -141,6 +154,7 @@ func main() {
         if err != nil {
             panic(err)
         }
+        fmt.Printf("Muon threshold = %d\n", r.MuThreshold)
         if r.Commit.Modified && !(modallowed) {
             panic(fmt.Errorf("Code has local modifications: %v\n", r.Commit))
         }
@@ -152,10 +166,10 @@ func main() {
         irun += 1
         stop := time.Now()
         fmt.Printf("Stopped running at %v [%v]\n", stop, stop.Sub(r.Start))
+        control.Quit()
         if quit {
             break
         }
     }
     fmt.Printf("Stopped all runs.\n")
-    control.Quit()
 }

@@ -207,16 +207,16 @@ func (r *Reader) DisableReadout() error {
 
 // Initially enable all data and trigger channels
 func (r *Reader) EnableReadoutChannels() error {
-    fmt.Printf("Enabling readout on data and trigger channels: %v, %v\n", r.channels, r.triggerchannels)
+    //fmt.Printf("Enabling readout on data and trigger channels: %v, %v\n", r.channels, r.triggerchannels)
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     stat := r.hw.Module.Registers["csr"].Words["stat"]
     for _, ch := range r.cfg.DataChannels {
         if !ch.ReadoutEnabled {
-            fmt.Printf("Readout disabled for channel %d\n", ch.Channel)
+            //fmt.Printf("Readout disabled for channel %d\n", ch.Channel)
             p := ipbus.MakePacket(ipbus.Control)
-            fmt.Printf("Selecting channel %d\n", ch)
+            //fmt.Printf("Selecting channel %d\n", ch)
             ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
             //chanctrl.MaskedWrite("src_sel", 1, &p)
             ctrl.Read(&p)
@@ -228,30 +228,28 @@ func (r *Reader) EnableReadoutChannels() error {
                 return err
             }
             rr := <-reply
+/*
             ctrls := stat.GetReads(rr)
             if len(ctrls) > 0 {
                 fmt.Printf("csr.stat = %x\n", ctrls)
             }
+*/
             r.towrite <- rr
         } else {
             p := ipbus.MakePacket(ipbus.Control)
-            fmt.Printf("Selecting channel %d\n", ch.Channel)
+            //fmt.Printf("Selecting channel %d\n", ch.Channel)
             ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
             //chanctrl.MaskedWrite("src_sel", 1, &p)
             ctrl.Read(&p)
             stat.Read(&p)
             chanctrl.Read(&p)
-            fmt.Printf("Enabling readout.\n")
+            //fmt.Printf("Enabling readout.\n")
             chanctrl.MaskedWrite("ro_en", 1, &p)
             stat.Read(&p)
             if err := r.hw.Send(p, reply); err != nil {
                 return err
             }
             rr := <-reply
-            ctrls := stat.GetReads(rr)
-            if len(ctrls) > 0 {
-                fmt.Printf("csr.stat = %x\n", ctrls)
-            }
             r.towrite <- rr
         }
     }
@@ -320,13 +318,14 @@ func (r *Reader) SetCoincidenceMode(mode bool) error {
 }
 
 func (r *Reader) StartSelfTriggers(thr, muthr uint32) error {
+    fmt.Printf("Setting SoLid threhsold = %d, muon veto threshold = %d\n", thr, muthr)
     r.cfg.SetThresholds(thr, muthr)
     reply := make(chan data.ReqResp)
     ctrl := r.hw.Module.Registers["csr"].Words["ctrl"]
     chanctrl := r.hw.Module.Registers["chan_csr"].Words["ctrl"]
     for _, ch := range r.cfg.DataChannels {
         if !ch.TriggerEnabled {
-            fmt.Printf("GLIB%d, channel %d trigger disabled.\n", r.hw.Num, ch.Channel)
+            //fmt.Printf("GLIB%d, channel %d trigger disabled.\n", r.hw.Num, ch.Channel)
             p := ipbus.MakePacket(ipbus.Control)
             ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
             chanctrl.MaskedWrite("trig_en", 0, &p)
@@ -340,7 +339,7 @@ func (r *Reader) StartSelfTriggers(thr, muthr uint32) error {
             if err != nil {
                 panic(err)
             }
-            fmt.Printf("GLIB%d: Set channel %d threshold = %d\n", r.hw.Num, ch, thr)
+            //fmt.Printf("GLIB%d: Set channel %d threshold = %d\n", r.hw.Num, ch, thr)
             p := ipbus.MakePacket(ipbus.Control)
             ctrl.MaskedWrite("chan_sel", ch.Channel, &p)
             chanctrl.MaskedWrite("t_thresh", thr, &p)
@@ -489,6 +488,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
     emptyticker := time.NewTicker(10000 * time.Second)
     emptying := false
     stopped := make(chan bool, 2)
+    hwstopped := false
     for running {
         select {
         // Signal to stop
@@ -507,11 +507,19 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             fmt.Printf("GLIB%d: signal to stop.\n", r.hw.Num)
             emptyticker = time.NewTicker(30 * time.Second)
             emptying = true
+            if hwstopped {
+                stopped <- true
+                running = false
+                continue
+            }
         case <-emptyticker.C:
             fmt.Printf("GLIB%d: giving up on emptying buffers.\n", r.hw.Num)
             running = false
             emptying = false
         default:
+        }
+        if hwstopped {
+            continue
         }
         // Get replies from the read request, send data to writer's channel and
         // sleep for period based upon Number of words ready to read
@@ -549,7 +557,11 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                 buffersize.Read(&p)
             }
 //            fmt.Printf("Sending %dth packet reading %d words.\n", npacks, nread)
-            r.hw.Send(p, r.read)
+            if err := r.hw.Send(p, r.read); err != nil {
+                hwstopped = true
+                fmt.Printf("GLIB%d: stopping due to error from Send: %v\n", r.hw.Num, err)
+                continue
+            }
             npacks += 1
         }
         if npacks == 0 {
@@ -557,11 +569,20 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             stat.Read(&p)
             buffersize.Read(&p)
             npacks = 1
-            r.hw.Send(p, r.read)
+            if err := r.hw.Send(p, r.read); err != nil {
+                hwstopped = true
+                fmt.Printf("GLIB%d: stopping due to error from Send: %v\n", r.hw.Num, err)
+                continue
+            }
         //    fmt.Printf("Sending single packet with stat and and buffer.size read.\n")
         }
         for ipack := 0; ipack < npacks; ipack++ {
-            data := <-r.read
+            data, ok := <-r.read
+            if !ok {
+                hwstopped = true
+                fmt.Printf("GLIB%d: stopping due to closed channel.\n", r.hw.Num)
+                break
+            }
             if ipack == 0 { // First pack, get readout stopped state
                 ro_stop := stat.GetMaskedReads("ro_stop", data)[0]
                 ncycle += 1
@@ -586,6 +607,9 @@ func (r *Reader) Run(errs chan data.ErrPack) {
                         maxsize = bufferlen
                     }
                 }
+            }
+            if nempty < 3 {
+                r.towrite <- data
             }
         }
         if emptying && bufferlen == 0 {
@@ -716,7 +740,7 @@ func (r Reader) Reset(nuke bool) error {
     rr = <-reply
     r.towrite <- rr
     time.Sleep(time.Second)
-    r.TrigStat()
+    //r.TrigStat()
     // Reset delays
     for _, ch := range r.channels {
         p = ipbus.MakePacket(ipbus.Control)
@@ -993,7 +1017,7 @@ func (r Reader) Align() error {
         }
         rr := <-reply
         r.towrite <- rr
-        r.ChanStat(ch.Channel)
+        //r.ChanStat(ch.Channel)
     }
     for ich := uint32(0); ich < 76; ich++ {
         p := ipbus.MakePacket(ipbus.Control)
@@ -1118,6 +1142,7 @@ func (w *Writer) end() error {
     if _, err := w.outp.Write(buf.Bytes()); err != nil {
         return err
     }
+    fmt.Printf("Wrote footer to %s\n", w.outp.Name())
     w.open = false
     err := w.outp.Close()
     // If there is a long term storage directory move file there.
@@ -1187,7 +1212,7 @@ func (w *Writer) create(r data.Run) error {
         }
         nwritten += n
     }
-    fmt.Printf("Wrote heder to %s.\n", w.outp.Name())
+    fmt.Printf("Wrote header to %s.\n", w.outp.Name())
     w.open = true
     return err
 }
@@ -1220,6 +1245,12 @@ type Control struct{
 
 func (c *Control) Send(nhw int, pack ipbus.Packet, rep chan data.ReqResp) {
     c.hws[nhw].Send(pack, rep)
+}
+
+func (c *Control) SetVerbose(n int) {
+    for _, hw := range c.hws {
+        hw.SetVerbose(n)
+    }
 }
 
 // Prepare for the first run by configuring the FPGAs, etc
@@ -1347,7 +1378,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     fmt.Printf("Resetting data readers\n")
     for _, reader := range c.readers {
         reader.Reset(c.nuke)
-        reader.TrigStat()
+        //reader.TrigStat()
         reader.Align()
         reader.TriggerWindow(0xff, 0x19)
         reader.SetCoincidenceMode(r.Coincidence)
@@ -1383,6 +1414,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         go reader.Run(c.errs)
     }
     // Check everything is locked
+/*
     fmt.Printf("Checking that all GLIBs are correclty configured.\n")
     for _, reader := range c.readers {
         reader.TrigStat()
@@ -1390,6 +1422,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
             reader.ChanStat(i)
         }
     }
+*/
     // Start random triggers
     fmt.Printf("Starting random triggers.\n")
     randrate := r.Rate
@@ -1421,7 +1454,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
         fmt.Printf("Stopped due to ticker.\n")
     case err = <-c.errs:
         fmt.Printf("Control.Run() stopped due to error channel\n")
-        quit = true
+        //quit = true
     case <-c.signals:
         fmt.Printf("Control.Run() stopped by ctrl+c\n")
         quit = true
@@ -1457,9 +1490,11 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     }
 
     // Check derandomisers are empty
+    /*
     for _, reader := range c.readers {
         reader.TrigStat()
     }
+    */
     return quit, err
 }
 
@@ -1469,6 +1504,9 @@ func (c Control) Quit() error {
     _, ok := <-c.w.Quit
     if !ok {
         fmt.Printf("Writer quit successfully.\n")
+    }
+    for _, hw := range c.hws {
+        hw.Stop <- true
     }
     return error(nil)
 

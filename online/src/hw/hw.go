@@ -45,8 +45,11 @@ func newPacket(data []byte) packet {
 type request struct {
     request ipbus.Packet
     reqresp data.ReqResp
-    sent, received time.Time
     dest chan data.ReqResp
+}
+
+func (r request) String() string {
+    return fmt.Sprintf("reqresp: index = %d, size = %d [%x]", r.reqresp.RespIndex, r.reqresp.RespSize, r.reqresp.Bytes)
 }
 
 var nhw = 0
@@ -61,6 +64,25 @@ func New(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs c
 	hw.init()
 	fmt.Printf("Created new HW: %v\n", hw)
 	return &hw
+}
+
+func newTracker(size int) tracker {
+    ids := make([]uint16, size)
+    return tracker{ids, 0, size}
+}
+
+type tracker struct {
+    ids []uint16
+    index, max int
+}
+
+func (t tracker) String() string {
+    return fmt.Sprintf("%v, %d", t.ids, t.index)
+}
+
+func (t * tracker) add(id uint16) {
+    t.index = (t.index + 1) % t.max
+    t.ids[t.index] = id
 }
 
 type idlog struct {
@@ -149,10 +171,15 @@ type HW struct {
     waittime time.Duration
     nverbose int
     bytessent, bytesreceived float64
+    packssent, packsreceived float64
     reporttime time.Duration
     returnedids []uint16
     returnedindex, returnedsize int
     stopped bool
+    Stop chan bool
+    sentout, received, returned tracker
+    resent uint16
+    handlinglost bool
 }
 
 func (h *HW) init() {
@@ -167,6 +194,10 @@ func (h *HW) init() {
     h.returnedsize = 32
     h.returnedindex = 31
     h.returnedids = make([]uint16, h.returnedsize)
+    h.Stop = make(chan bool)
+    h.sentout = newTracker(16)
+    h.received = newTracker(16)
+    h.returned = newTracker(16)
 }
 
 func (h HW) String() string {
@@ -197,8 +228,16 @@ func (h *HW) updatetimeout() {
 func (h *HW) handlelost() {
     defer h.clean()
     h.timedout.Stop()
+    h.handlinglost = true
     fmt.Printf("Trying to handle a lost packet with id = %d = 0x%x.\n", h.timeoutid, h.timeoutid)
     fmt.Printf("Previously returned = %v, %d\n", h.returnedids, h.returnedindex)
+    fmt.Printf("sent out = %v\n", h.sentout)
+    fmt.Printf("received = %v\n", h.received)
+    fmt.Printf("returned = %v\n", h.returned)
+    fmt.Printf("Flying requests:\n")
+    for id, req := range h.flying {
+        fmt.Printf("id = %d = 0x%x: %v\n", id, id, req)
+    }
     status := ipbus.StatusPacket()
     rc := make(chan data.ReqResp)
     h.Send(status, rc)
@@ -241,6 +280,16 @@ func (h *HW) handlelost() {
     } else {
         fmt.Printf("Packet received but not sent, not sure what to do...\n")
     }
+    fmt.Printf("sent out = %v\n", h.sentout)
+    fmt.Printf("received = %v\n", h.received)
+    fmt.Printf("returned = %v\n", h.returned)
+    time.Sleep(500 * time.Millisecond)
+    h.Send(status, rc)
+    rr = <-rc
+    if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
+        panic(fmt.Errorf("Failed to parse status packet handling lost: %v", err))
+    }
+    fmt.Printf("Found status: %v\n", statusreply)
     panic(fmt.Errorf("Just panic when a packet is lost."))
 }
 
@@ -288,13 +337,19 @@ func (h * HW) sendnext() error {
     return err
 }
 
+func (h *HW) SetVerbose(n int) {
+    h.nverbose = n
+}
+
 func (h *HW) sendpack(req request) error {
     //fmt.Printf("Sending packet with ID = %d\n", req.reqresp.Out.ID)
+    h.sentout.add(req.reqresp.Out.ID)
     if h.nverbose > 0 {
         fmt.Printf("Sending request: %v, 0x%x\n", req, req.reqresp.Bytes[:req.reqresp.RespIndex])
     }
     n, err := h.conn.Write(req.reqresp.Bytes[:req.reqresp.RespIndex])
     h.bytessent += float64(n)
+    h.packssent += 1.0
     if err != nil {
         return fmt.Errorf("Failed after sending %d bytes: %v", n, err)
     }
@@ -313,6 +368,7 @@ func (h * HW) returnreply() {
         if ok {
             h.flyingids.remove()
             delete(h.replied, first)
+            h.returned.add(first)
             p.dest <- p.reqresp
             sentrep = true
             h.returnedindex = (h.returnedindex + 1) % h.returnedsize
@@ -322,13 +378,26 @@ func (h * HW) returnreply() {
 }
 
 func (h *HW) clean() {
-    h.stopped = true
     if r := recover(); r != nil {
         if err, ok := r.(error); ok {
-            fmt.Printf("HW%d caught panic.\n", h.Num)
+            fmt.Printf("HW%d caught panic: %v.\n", h.Num, err)
+            h.stopped = true
+            h.closeall()
             ep := data.MakeErrPack(err)
             h.errs <- ep
         }
+    }
+}
+
+func (h *HW) closeall() {
+    for _, req := range h.replied {
+        close(req.dest)
+    }
+    for _, req := range h.flying {
+        close(req.dest)
+    }
+    for _, req := range h.tosend {
+        close(req.dest)
     }
 }
 
@@ -344,6 +413,10 @@ func (h *HW) Run() {
     reportticker := time.NewTicker(h.reporttime)
     for running {
         select {
+        case <-h.Stop:
+            h.conn.Close()
+            fmt.Printf("HW%d following request to stop.\n", h.Num)
+            running = false
         case req := <-h.incoming:
             // Handle incoming request
             // If there are flight slots free send and update ticker, if not queue
@@ -359,7 +432,18 @@ func (h *HW) Run() {
                     panic(fmt.Errorf("HW%d: %v", h.Num, err))
                 }
                 req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
-                h.sendpack(req)
+                h.resent = req.reqresp.Out.ID
+                if h.handlinglost {
+                    h.sendpack(req)
+                } else {
+                    fmt.Printf("Received a resend request but not hanlding lost packet, treating it like normal.\n")
+                    h.tosend[req.reqresp.Out.ID] = req
+                    err := h.queuedids.add(req.reqresp.Out.ID)
+                    if err != nil {
+                        panic(err)
+                    }
+                    h.sendnext()
+                }
             } else {
                 req.reqresp.Out.ID = h.nextid()
                 if err := req.reqresp.EncodeOut(); err != nil {
@@ -381,6 +465,7 @@ func (h *HW) Run() {
             // Update ticker
             id := uint16(rep.Data[1]) << 8
             id |= uint16(rep.Data[2])
+            h.received.add(id)
             if h.nverbose > 0 {
                 fmt.Printf("Received packet with ID = %d = 0x%x\n", id, id)
                 h.nverbose -= 1
@@ -390,7 +475,7 @@ func (h *HW) Run() {
                     delete(h.flying, id)
                     req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
                     req.reqresp.RAddr = rep.RAddr
-                    req.received = time.Now()
+                    req.reqresp.Received = time.Now()
                     if err := req.reqresp.Decode(); err != nil {
                         panic(err)
                     }
@@ -406,6 +491,7 @@ func (h *HW) Run() {
                         h.updatetimeout()
                     }
                     delete(h.flying, id)
+                    h.sendnext()
                     req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
                     req.reqresp.RAddr = rep.RAddr
                     req.reqresp.Received = time.Now()
@@ -413,10 +499,13 @@ func (h *HW) Run() {
                         panic(err)
                     }
                     h.replied[id] = req
-                    h.sendnext()
                     h.returnreply()
                 } else {
-                    panic(fmt.Errorf("HW%d: Received packet with ID = %d, no match in %v", h.Num, id, h.inflight))
+                    if id == h.resent {
+                        fmt.Printf("Received a resent packet with ID = %d, but not found ID in h.flying.\n", id)
+                    } else {
+                        panic(fmt.Errorf("HW%d: Received packet with ID = %d, no match in %v", h.Num, id, h.inflight))
+                    }
                 }
             }
         case <-h.timedout.C:
@@ -424,11 +513,16 @@ func (h *HW) Run() {
             fmt.Printf("HW%d: lost a packet :(\nSent ID log: %v\nqueued ID log: %v\nh.nextID = %d", h.Num, h.flyingids, h.queuedids, h.nextID)
             go h.handlelost()
         case <-reportticker.C:
-            sentrate := h.bytessent / h.reporttime.Seconds() / 1e6
-            recvrate := h.bytesreceived / h.reporttime.Seconds() / 1e6
-            fmt.Printf("HW%d sent = %0.2f MB/s, received = %0.2f MB/s\n", h.Num, sentrate, recvrate)
+            dt := h.reporttime.Seconds()
+            sentrate := h.bytessent / dt / 1e6
+            recvrate := h.bytesreceived / dt / 1e6
+            psentrate := h.packssent / dt / 1e3
+            precvrate := h.packsreceived / dt / 1e3
+            fmt.Printf("HW%d sent = %0.2f kHz, %0.2f MB/s, received = %0.2f kHz, %0.2f MB/s\n", h.Num, psentrate, sentrate, precvrate, recvrate)
             h.bytessent = 0.0
             h.bytesreceived = 0.0
+            h.packssent = 0.0
+            h.packsreceived = 0.0
         }
     }
 }
@@ -450,6 +544,7 @@ func (h *HW) nextid() uint16 {
 
 func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
     if h.stopped {
+        fmt.Printf("Not sending a packet because HW%d is stopped.\n", h.Num)
         return fmt.Errorf("HW%d is stopped.", h.Num)
     }
     rr := data.CreateReqResp(p)
@@ -515,15 +610,17 @@ func (h *HW) receive() {
         p := emptyPacket()
         n, addr, err := h.conn.ReadFrom(p.Data)
         h.bytesreceived += float64(n)
+        h.packsreceived += 1.0
         if err != nil {
-            panic(fmt.Errorf("HW%d read %d bytes from %v: %v\n", h.Num, n, addr, err))
+            running = false
+            fmt.Printf("HW%d not receiving as connection closed.\n", h.Num)
+        } else {
+            if h.nverbose > 0 {
+                fmt.Printf("Received a packet of %d bytes: 0x%x.\n", n, p.Data[:n])
+            }
+            p.Data = p.Data[:n]
+            p.RAddr = addr
+            h.replies <- p
         }
-        if h.nverbose > 0 {
-            fmt.Printf("Received a packet of %d bytes.\n", n)
-        }
-        p.Data = p.Data[:n]
-        p.RAddr = addr
-        h.replies <- p
     }
-
 }

@@ -454,12 +454,12 @@ func StatusPacket() Packet {
 
 type TrafficHistory struct {
     Data uint8
-    FailedCRC, Dropped bool
+    FailedCRC, Dropped, TransmitError bool
     Type EventType
 }
 
 func (th TrafficHistory) String() string {
-    return fmt.Sprintf("hist: failed = %t, dropped = %t, type = %v", th.FailedCRC, th.Dropped, th.Type)
+    return fmt.Sprintf("trafhist 0x%x [failed = %t, dropped = %t, transmit err = %t, type = %v]", th.Data, th.FailedCRC, th.Dropped, th.TransmitError, th.Type)
 }
 
 func (th *TrafficHistory) Encode() {
@@ -470,12 +470,16 @@ func (th *TrafficHistory) Encode() {
     if th.Dropped {
         th.Data |= (0x1 << 6)
     }
+    if th.TransmitError {
+        th.Data |= (0x1 << 4)
+    }
 }
 
 func (th *TrafficHistory) Parse() {
     th.FailedCRC = th.Data & (0x1 << 7) > 0
     th.Dropped = th.Data & (0x1 << 6) > 0
-    th.Type = EventType(th.Data | 0x7)
+    th.Type = EventType(th.Data | 0xf)
+    th.TransmitError = th.Data & (0x1 << 4) > 0
 }
 
 func NewHistory(data uint8) *TrafficHistory {

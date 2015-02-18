@@ -84,7 +84,7 @@ type Glib struct {
 func (g Glib) SetThresholds(thr, muthr uint32) {
     for _, ch := range g.DataChannels {
         if ch.MuonPanel {
-            fmt.Printf("Setting muon veto panel threshold on %v\n", ch)
+            //fmt.Printf("Setting muon veto panel threshold on %v\n", ch)
             ch.SetThreshold(muthr)
         } else {
             ch.SetThreshold(thr)
@@ -126,7 +126,7 @@ func (d DataChannel) String() string {
 }
 
 func (dc *DataChannel) merge(offset TimingOffset, pedspa PedSPA, masks Masks) error {
-    fmt.Printf("Merging %v, %v and %v\n", offset, pedspa, masks)
+    //fmt.Printf("Merging %v, %v and %v\n", offset, pedspa, masks)
     if offset.GLIB != dc.GLIB || offset.Channel != dc.Channel {
         return errors.New("Channel merge fail: offset from different channel")
     }
