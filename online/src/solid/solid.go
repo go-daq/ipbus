@@ -506,7 +506,7 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             sizecount = 0.0
             maxsize = 0
             glib := r.hw.Num
-            if stoppedrate0 > 50.0 || (stoppedrate1 > 50.0 && glib < 6) {
+            if stoppedrate0 > 50.0 && stoppedrate1 > 50.0 {
                 err := fmt.Errorf("GLIB%d stopped %0.2f %%, %0.2f %%", glib, stoppedrate0, stoppedrate1)
                 errp := data.MakeErrPack(err)
                 r.errs <- errp
