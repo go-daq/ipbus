@@ -156,13 +156,15 @@ type Reader struct{
     channels, triggerchannels []uint32
     thresholds map[uint32]uint32
     exit *crash.Exit
+    errs chan data.ErrPack
 }
 
 func NewReader(hw *hw.HW, cfg config.Glib, towrite chan data.ReqResp, period,
-               dt time.Duration, channels []uint32, exit *crash.Exit) *Reader {
+               dt time.Duration, channels []uint32, exit *crash.Exit,
+               errs chan data.ErrPack) *Reader {
     triggerchannels := []uint32{0x90, 0x91}
     r := Reader{hw: hw, cfg: cfg, towrite: towrite, period: period, dt: dt,
-                channels: channels, triggerchannels: triggerchannels, exit: exit}
+                channels: channels, triggerchannels: triggerchannels, exit: exit, errs: errs}
     r.Stop = make(chan chan bool)
     return &r
 }
@@ -503,6 +505,12 @@ func (r *Reader) Run(errs chan data.ErrPack) {
             totalsize = 0.0
             sizecount = 0.0
             maxsize = 0
+            glib := r.hw.Num
+            if stoppedrate0 > 50.0 || (stoppedrate1 > 50.0 && glib < 6) {
+                err := fmt.Errorf("GLIB%d stopped %0.2f %%, %0.2f %%", glib, stoppedrate0, stoppedrate1)
+                errp := data.MakeErrPack(err)
+                r.errs <- errp
+            }
         case stopped = <-r.Stop:
             fmt.Printf("GLIB%d: signal to stop.\n", r.hw.Num)
             emptyticker = time.NewTicker(30 * time.Second)
@@ -1269,7 +1277,7 @@ func (c *Control) Start() data.ErrPack {
     for _, hw := range c.hws {
         go hw.Run()
         cfg := config.Load(hw.Num)
-        r := NewReader(hw, cfg, c.datatowriter, time.Second, time.Microsecond, c.channels, c.exit)
+        r := NewReader(hw, cfg, c.datatowriter, time.Second, time.Microsecond, c.channels, c.exit, c.errs)
         c.readers = append(c.readers, r)
     }
 
@@ -1427,7 +1435,7 @@ func (c Control) Run(r data.Run) (bool, data.ErrPack) {
     fmt.Printf("Starting random triggers.\n")
     randrate := r.Rate
     if r.Threshold > 0 {
-        randrate = 1.0
+        randrate = 0.2
     }
     if !c.internaltrigger {
         c.clock.RandomRate(randrate)
