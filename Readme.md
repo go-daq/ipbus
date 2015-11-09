@@ -1,6 +1,4 @@
-SM1 DAQ
+goIPbus
 =======
 
-This repository contains the software for SM1's data acqusition system.
-
-For instructions on DAQ operations see https://bitbucket.org/solidexperiment/sm1daq/wiki/DAQOperations
+IPbus software library implemented in go.
