@@ -7,29 +7,33 @@ import (
 
 // Supported IPbus protocol version
 const IPbusVersion = 2.0
+const protocolversion = uint8(2)
+
+// Maxiumum Ethernet packet size (bytes)
+var MaxPacketSize = 1500
 
 // Information codes
-type InfoCode uint8
+type infoCode uint8
 
-const BadHeader InfoCode = 0x1
-const BusReadError InfoCode = 0x4
-const BusWriteError InfoCode = 0x5
-const BusReadTimeout InfoCode = 0x6
-const BusWriteTimeout InfoCode = 0x7
-const Request InfoCode = 0xf
+const badHeader infoCode = 0x1
+const busReadError infoCode = 0x4
+const busWriteError infoCode = 0x5
+const busReadTimeout infoCode = 0x6
+const busWriteTimeout infoCode = 0x7
+const request infoCode = 0xf
 
 // Transaction types
-type TypeID uint8
+type typeID uint8
 
-const Read TypeID = 0x0
-const Write TypeID = 0x1
-const ReadNonInc TypeID = 0x2
-const WriteNonInc TypeID = 0x3
-const RMWbits TypeID = 0x4
-const RMWsum TypeID = 0x5
+const read TypeID = 0x0
+const write TypeID = 0x1
+const readnoninc TypeID = 0x2
+const writenoninc TypeID = 0x3
+const rmwbits TypeID = 0x4
+const rmwsum TypeID = 0x5
 
 func byte2uint32(bs []byte, order binary.ByteOrder) uint32 {
-    return order.Uint32(bs))
+    return order.Uint32(bs)
 }
 
 func bytes2uint32s(bs []byte, order binary.ByteOrder) []uint32 {
@@ -41,3 +45,10 @@ func bytes2uint32s(bs []byte, order binary.ByteOrder) []uint32 {
         }
     return us
 }
+
+// Packet types
+type packetType uint8
+
+const control packetType = 0x0
+const status packetType = 0x1
+const resend packetType = 0x2

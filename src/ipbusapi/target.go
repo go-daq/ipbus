@@ -14,8 +14,7 @@ type Target struct {
     // before sending all queued transactions, if AutoDispatch is true.
     // The Timeout is restarted each time a transaction is added when the queue is empty.
     TimeoutPeriod time.Duration
-    RegNames map[string]Register
-    RegAddrs map[uint32]Register
+    Regs map[string]Register
     // Enable/disable automatic dispatch of transactions.
     // If enabled transactions are sent at the first opportunity when:
     // a) A full UDP packet worth of transactions can be sent
@@ -24,16 +23,19 @@ type Target struct {
     // c) Target.Dispatch() is called.
     // If disabled transactions are only sent when Target.Dispatch() is called.
     AutoDispatch bool
-    queue []Transactions
+    outgoing, inflight []packet
+    nextoutid, nextinid uint32
 }
 
-func NewTarget(fn string) Target {
+// Create a new target by parsing an XML file description.
+func NewTarget(name, fn string) (Target, error) {
     names := make(map[string]Register)
     addrs := make(map[uint32]Register)
-    t := Target{RegName: names, RegAddrs: addrs}
+    t := Target{Name: name, RegName: names, RegAddrs: addrs}
     t.TimeoutPeriod = defaulttimeoutperiod
     t.AutoDispatch = defaultautodispatch
-    return t
+    err := t.parse(fn)
+    return t, err
 }
 
 /*
@@ -54,13 +56,19 @@ func (t Target) Dispatch() {
 
 }
 
+// Parse an XML file description of the target to automatically produce
+// the registers the target contains.
+func (t Target) parse(fn) error {
+    return error(nil)
+}
+
 // Read nword words from register reg.
-func (t Target) Read(reg Register, nword uint8) chan Response {
+func (t Target) Read(reg Register, nword uint) chan Response {
 
 }
 
 // Read nword words from register reg without incrementing address.
-func (t Target) ReadNonInc(reg Register, nword uint8) chan Response {
+func (t Target) ReadNonInc(reg Register, nword uint) chan Response {
 
 }
 
@@ -69,30 +77,18 @@ func (t Target) Write(reg Register, data []uint32) chan Response {
 
 }
 
-// Write words in data to register reg without incrementing address.
-func (t Target) WriteNonInc(reg Register, data []uint32) chan Response {
-
-}
-
 // Update reg by operation: x = (x & andterm) | orterm. Receive previous value of reg in reply.
 func (t Target) RMWbits(reg Register, andterm, orterm uint32) chan Response {
-
 
 }
 
 
 // Update reg by operation: x <= (x + addend). Receive previous value of reg in reply.
-func (t Target) RMWSum(reg Register, addend uint32) chan Response {
+func (t Target) RMWsum(reg Register, addend uint32) chan Response {
 
 }
 
 // Read transaction where reply is kept in []byte array.
-func (t Target) ReadB(reg Register, nword uint8) chan ResponseB {
+func (t Target) ReadB(reg Register, nword uint) chan Response {
 
 }
-
-// Non-incrementing Read transaction where reply is kept in []byte array.
-func (t Target) ReadNonIncB(reg Register, nword uint8) chan ResponseB {
-
-}
-
