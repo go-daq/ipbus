@@ -1,4 +1,4 @@
-package ipbusapi
+package ipbus
 
 // Response to a control transaction
 type Response struct {

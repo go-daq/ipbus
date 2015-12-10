@@ -1,4 +1,4 @@
-package ipbusapi
+package ipbus
 
 import (
     "time"
