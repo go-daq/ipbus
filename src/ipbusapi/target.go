@@ -4,8 +4,8 @@ import (
     "time"
 )
 
-const defaulttimeout = time.Second
-const defaultautodispatch = false
+const DefaultTimeout = time.Second
+const DefaultAutoDispatch = false
 
 
 type Target struct {
@@ -23,17 +23,17 @@ type Target struct {
     // c) Target.Dispatch() is called.
     // If disabled transactions are only sent when Target.Dispatch() is called.
     AutoDispatch bool
+    dest string
     outgoing, inflight []packet
     nextoutid, nextinid uint32
 }
 
 // Create a new target by parsing an XML file description.
 func NewTarget(name, fn string) (Target, error) {
-    names := make(map[string]Register)
-    addrs := make(map[uint32]Register)
-    t := Target{Name: name, RegName: names, RegAddrs: addrs}
-    t.TimeoutPeriod = defaulttimeoutperiod
-    t.AutoDispatch = defaultautodispatch
+    regs := make(map[string]Register)
+    t := Target{Name: name, Regs: regs}
+    t.TimeoutPeriod = DefaultTimeout
+    t.AutoDispatch = DefaultAutoDispatch
     err := t.parse(fn)
     return t, err
 }
@@ -56,39 +56,33 @@ func (t Target) Dispatch() {
 
 }
 
-// Parse an XML file description of the target to automatically produce
-// the registers the target contains.
-func (t Target) parse(fn) error {
-    return error(nil)
-}
-
 // Read nword words from register reg.
 func (t Target) Read(reg Register, nword uint) chan Response {
-
-}
-
-// Read nword words from register reg without incrementing address.
-func (t Target) ReadNonInc(reg Register, nword uint) chan Response {
+    return make(chan Response)
 
 }
 
 // Write words in data to register reg.
 func (t Target) Write(reg Register, data []uint32) chan Response {
+    return make(chan Response)
 
 }
 
 // Update reg by operation: x = (x & andterm) | orterm. Receive previous value of reg in reply.
 func (t Target) RMWbits(reg Register, andterm, orterm uint32) chan Response {
+    return make(chan Response)
 
 }
 
 
 // Update reg by operation: x <= (x + addend). Receive previous value of reg in reply.
 func (t Target) RMWsum(reg Register, addend uint32) chan Response {
+    return make(chan Response)
 
 }
 
 // Read transaction where reply is kept in []byte array.
 func (t Target) ReadB(reg Register, nword uint) chan Response {
+    return make(chan Response)
 
 }

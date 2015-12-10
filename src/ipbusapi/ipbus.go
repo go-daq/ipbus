@@ -10,7 +10,7 @@ const IPbusVersion = 2.0
 const protocolversion = uint8(2)
 
 // Maxiumum Ethernet packet size (bytes)
-var MaxPacketSize = 1500
+var MaxPacketSize = uint(1500)
 
 // Information codes
 type infoCode uint8
@@ -25,12 +25,12 @@ const request infoCode = 0xf
 // Transaction types
 type typeID uint8
 
-const read TypeID = 0x0
-const write TypeID = 0x1
-const readnoninc TypeID = 0x2
-const writenoninc TypeID = 0x3
-const rmwbits TypeID = 0x4
-const rmwsum TypeID = 0x5
+const read typeID = 0x0
+const write typeID = 0x1
+const readnoninc typeID = 0x2
+const writenoninc typeID = 0x3
+const rmwbits typeID = 0x4
+const rmwsum typeID = 0x5
 
 func byte2uint32(bs []byte, order binary.ByteOrder) uint32 {
     return order.Uint32(bs)

@@ -3,13 +3,13 @@ package ipbusapi
 // Response to a control transaction
 type Response struct {
     Err error
-    Code InfoCode
+    Code infoCode
     Data []uint32
     DataB []byte
 }
 
 type transaction struct {
-    Type TypeID
+    Type typeID
     NWords uint8
     Addr uint32
     Input []uint32
@@ -25,7 +25,7 @@ type packet struct {
 }
 
 func emptypacket(pt packetType) packet {
-    trans := make([]trans)
+    trans := make([]transaction, 0, 8)
     request := make([]byte, 4, 1472)
     request[0] = protocolversion << 4
     request[3] = 0xf0 & uint8(pt)
@@ -33,7 +33,7 @@ func emptypacket(pt packetType) packet {
     // Normal IP packet has up to 1500 bytes. IP header is 20 bytes, UDP 
     // header is 8 bytes. This leaves 368 words for the ipbus data.
     // First word is the packet header, so to he 
-    size := (PacketSize - 28) / 4
+    size := (MaxPacketSize - 28) / 4
     return packet{trans, size, size, 0, 0, request} // For normal packet 
 }
 
