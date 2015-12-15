@@ -47,3 +47,13 @@ func (p *packet) setid(id uint16) {
     part = uint8(id >> 8)
     p.request[1] = part
 }
+
+type usrrequest struct {
+    typeid typeID
+    nwords uint
+    addr uint32
+    Input []uint32
+    resp chan Response
+    byteslice bool
+}
+
