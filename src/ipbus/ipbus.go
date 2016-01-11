@@ -2,7 +2,7 @@
 package ipbus
 
 import (
-    "encoding/binary"
+	"encoding/binary"
 )
 
 // Supported IPbus protocol version
@@ -33,17 +33,17 @@ const rmwbits typeID = 0x4
 const rmwsum typeID = 0x5
 
 func byte2uint32(bs []byte, order binary.ByteOrder) uint32 {
-    return order.Uint32(bs)
+	return order.Uint32(bs)
 }
 
 func bytes2uint32s(bs []byte, order binary.ByteOrder) []uint32 {
-    size := len(bs) / 4
-    us := make([]uint32, 0, size)
-    for i := 0; i < size; i++ {
-        us = append(us, order.Uint32(bs))
-        bs = bs[4:]
-        }
-    return us
+	size := len(bs) / 4
+	us := make([]uint32, 0, size)
+	for i := 0; i < size; i++ {
+		us = append(us, order.Uint32(bs))
+		bs = bs[4:]
+	}
+	return us
 }
 
 // Packet types
