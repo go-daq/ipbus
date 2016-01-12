@@ -81,12 +81,12 @@ func (t Target) preparepackets() {
 				case req.typeid == read || req.typeid == readnoninc:
 					nwords := req.nwords
 					for nwords > 0 {
-						if reqspace < 2 || respspace > 2 {
+						if reqspace < 2 || respspace < 2 {
 							packs = append(packs, emptypacket(control))
 							p = packs[len(packs)-1]
 							reqspace, respspace = p.space()
 						}
-						ntoread := respspace
+						ntoread := respspace - 1
 						if ntoread > nwords {
 							ntoread = nwords
 						}
@@ -105,12 +105,12 @@ func (t Target) preparepackets() {
 					nwords := len(req.Input)
 					index := 0
 					for nwords > 0 {
-						if reqspace < 2 || respspace > 2 {
+						if reqspace < 3 || respspace < 1 {
 							packs = append(packs, emptypacket(control))
 							p = packs[len(packs)-1]
 							reqspace, respspace = p.space()
 						}
-						ntowrite := reqspace
+						ntowrite := reqspace - 1
 						if ntowrite > nwords {
 							ntowrite = nwords
 						}
