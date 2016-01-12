@@ -27,6 +27,7 @@ type Target struct {
 	nextoutid, nextinid uint32
 	requests            chan usrrequest
 	finishpacket, stop  chan bool
+	hw					HW
 }
 
 // Create a new target by parsing an XML file description.
@@ -167,6 +168,7 @@ func (t Target) Dispatch() {
 }
 
 func (t *Target) send(p *packet) {
+	t.hw.Send(p)
 }
 
 func (t *Target) enqueue(r usrrequest) {

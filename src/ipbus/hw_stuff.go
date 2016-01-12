@@ -1,4 +1,4 @@
-package hw
+package ipbus
 
 import (
 	"data"
@@ -7,27 +7,27 @@ import (
 	"net"
 )
 
-type packet struct {
+type hwpacket struct {
 	Data  []byte
 	RAddr net.Addr
 }
 
-func emptyPacket() packet {
+func emptyPacket() hwpacket {
 	d := make([]byte, 1500)
-	return packet{Data: d}
+	return hwpacket{Data: d}
 }
 
-func newPacket(data []byte) packet {
-	return packet{Data: data}
+func newPacket(data []byte) hwpacket {
+	return hwpacket{Data: data}
 }
 
-type request struct {
+type hwrequest struct {
 	request oldipbus.Packet
 	reqresp data.ReqResp
 	dest    chan data.ReqResp
 }
 
-func (r request) String() string {
+func (r hwrequest) String() string {
 	return fmt.Sprintf("reqresp: index = %d, size = %d [%x]", r.reqresp.RespIndex, r.reqresp.RespSize, r.reqresp.Bytes)
 }
 
