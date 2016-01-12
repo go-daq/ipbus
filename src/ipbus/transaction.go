@@ -1,5 +1,11 @@
 package ipbus
 
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+)
+
 // Response to a control transaction
 type Response struct {
 	Err   error
@@ -20,24 +26,80 @@ type transaction struct {
 type packet struct {
 	transactions    []transaction
 	reqcap, respcap uint
-	reqlen, replen  uint
-	request         []byte
+	reqlen, resplen uint
+	request         bytes.Buffer
 }
 
 func emptypacket(pt packetType) packet {
 	trans := make([]transaction, 0, 8)
-	request := make([]byte, 4, 1472)
-	request[0] = protocolversion << 4
-	request[3] = 0xf0 & uint8(pt)
-
+	request := bytes.NewBuffer(make([]byte, 0, 1472))
+	header := uint32(0)
+	header |= protocolversion << 24
+	header |= 0xf0
+	header |= uint8(pt)
+	binary.Write(request, binary.BigEndian, header)
 	// Normal IP packet has up to 1500 bytes. IP header is 20 bytes, UDP
 	// header is 8 bytes. This leaves 368 words for the ipbus data.
-	// First word is the packet header, so to he
 	size := (MaxPacketSize - 28) / 4
 	return packet{trans, size, size, 0, 0, request} // For normal packet
 }
 
 func (p *packet) add(trans transaction) error {
+	// Check that the size of the transaction and its reply will fit and that
+	// the request has the correct amount of data.
+	// Update the reqlen and resplen
+	reqspace, respspace = p.space()
+	switch {
+	case trans.Type == read || trans.Type == readnoninc:
+		if len(trans.Input) > 0 {
+			return fmt.Errorf("Read/ReadNonInc transaction with nonzero (%d) words of input data", len(trans.Input))
+		}
+		if reqspace < 2 || respspace < trans.NWords+1 {
+			return fmt.Errorf("Add %d word Read[NonInc]: insufficient space in packet.", trans.NWord)
+		}
+		reqlen += 2
+		resplen += trans.NWords + 1
+	case trans.Type == write || trans.Type == writenoninc:
+		if len(trans.Input) != trans.NWords {
+			return fmt.Errorf("Write/WriteNonInc transaction with NWords = %d, but %d words of input data", trans.NWords, len(trans.Input))
+		}
+		if reqspace < 2+trans.NWords || respspace < 1 {
+			return fmt.Errorf("Add %d word Write[NonInc]: insufficient space in packet.", trans.NWord)
+		}
+		reqlen += 2 + trans.NWords
+		resplen += 1
+	case trans.Type == rmwbits:
+		if len(trans.Input != 2) {
+			return fmt.Errorf("RMWbits with %d words of input data (expect 2: AND, OR)", len(trans.Input))
+		}
+		if reqspace < 4 || respspace < 2 {
+			return fmt.Errorf("Add RMWbits: insufficient space in packet.")
+		}
+		reqlen += 4
+		resplen += 2
+	case trans.Type == rmwsum:
+		if len(trans.Input != 1) {
+			return fmt.Errorf("RMWsum with %d words of input data (expect 1: ANDEND)", len(trans.Input))
+		}
+		if reqspace < 3 || respspace < 2 {
+			return fmt.Errorf("Add RMWsum: insufficient space in packet.")
+		}
+		reqlen += 3
+		resplen += 2
+	}
+
+	// Fill the outgoing packet
+	header := uint32(0)
+	header |= protocolversion << 24
+	tID := len(transactions)
+	header |= uint32(tID) << 16
+	header |= uint32(trans.NWords) << 8
+	header |= uint32(typeID) << 4
+	header |= uint32(request)
+	binary.Write(request, binary.BigEndian, header)
+	binary.Write(request, binary.BigEndian, trans.Addr)
+	binary.Write(request, binary.BigEndian, trans.Input)
+	transactions = append(transactions, trans)
 	return error(nil)
 }
 
