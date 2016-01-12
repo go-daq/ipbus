@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"time"
 )
 
 // Response to a control transaction
@@ -24,10 +25,18 @@ type transaction struct {
 }
 
 type packet struct {
+	id				uint16
 	transactions    []transaction
 	reqcap, respcap uint
 	reqlen, resplen uint
 	request         *bytes.Buffer
+	sent			time.Time
+}
+
+func (p packet) Bytes() []byte {
+	b := p.request.Bytes()
+	binary.BigEndian.PutUint16(b[2:4], p.id)
+	return b
 }
 
 func emptypacket(pt packetType) packet {
@@ -41,7 +50,7 @@ func emptypacket(pt packetType) packet {
 	// Normal IP packet has up to 1500 bytes. IP header is 20 bytes, UDP
 	// header is 8 bytes. This leaves 368 words for the ipbus data.
 	size := (MaxPacketSize - 28) / 4
-	return packet{trans, size, size, 0, 0, request} // For normal packet
+	return packet{0, trans, size, size, 0, 0, request, time.Time{}} // For normal packet
 }
 
 func (p *packet) add(trans transaction) error {

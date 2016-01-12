@@ -59,10 +59,10 @@ type HW struct {
 	Module glibxml.Module // Addresses of registers, ports, etc.
 	// New stuff for multiple packets in flight:
 	inflight, maxflight         int
-	tosend, flying, replied     map[uint16]hwrequest
+	tosend, flying, replied     map[uint16]*packet
 	queuedids, flyingids        idlog
 	timedout                    *time.Ticker
-	incoming                    chan hwrequest
+	incoming                    chan *packet
 	waittime                    time.Duration
 	nverbose                    int
 	bytessent, bytesreceived    float64
@@ -79,13 +79,13 @@ type HW struct {
 
 func (h *HW) init() {
 	h.replies = make(chan hwpacket, 100)
-	h.tosend = make(map[uint16]hwrequest)
-	h.flying = make(map[uint16]hwrequest)
-	h.replied = make(map[uint16]hwrequest)
+	h.tosend = make(map[uint16]*packet)
+	h.flying = make(map[uint16]*packet)
+	h.replied = make(map[uint16]*packet)
 	h.queuedids = newIDLog(256)
 	h.flyingids = newIDLog(32)
 	h.timedout = time.NewTicker(10000 * time.Second)
-	h.incoming = make(chan hwrequest, 100)
+	h.incoming = make(chan *packet, 100)
 	h.returnedsize = 32
 	h.returnedindex = 31
 	h.returnedids = make([]uint16, h.returnedsize)
@@ -112,7 +112,7 @@ func (h *HW) updatetimeout() {
 	if h.inflight > 0 {
 		first, ok := h.flyingids.secondoldest()
 		if ok {
-			dt := h.waittime - time.Since(h.flying[first].reqresp.Sent)
+			dt := h.waittime - time.Since(h.flying[first].sent)
 			//fmt.Printf("update timeout = %v, wait time = %d, %v since sent at %v\n", dt, h.waittime, h.flying[first].reqresp.Sent)
 			h.timedout = time.NewTicker(dt)
 			h.timeoutid = first
@@ -214,14 +214,14 @@ func (h *HW) sendnext() error {
 			return fmt.Errorf("Failed to get oldest queued ID")
 		}
 		h.queuedids.remove()
-		req := h.tosend[first]
+		pack := h.tosend[first]
 		delete(h.tosend, first)
-		err = h.sendpack(req)
+		err = h.sendpack(pack)
 		if err != nil {
 			return err
 		}
-		req.reqresp.Sent = time.Now()
-		h.flying[first] = req
+		pack.sent = time.Now()
+		h.flying[first] = pack
 		h.flyingids.add(first)
 		h.inflight += 1
 		if h.inflight == 1 {
@@ -236,13 +236,14 @@ func (h *HW) SetVerbose(n int) {
 	h.nverbose = n
 }
 
-func (h *HW) sendpack(req hwrequest) error {
+func (h *HW) sendpack(pack *packet) error {
 	//fmt.Printf("Sending packet with ID = %d\n", req.reqresp.Out.ID)
-	h.sentout.add(req.reqresp.Out.ID)
+	h.sentout.add(pack.id)
+	data := pack.Bytes()
 	if h.nverbose > 0 {
-		fmt.Printf("Sending request: %v, 0x%x\n", req, req.reqresp.Bytes[:req.reqresp.RespIndex])
+		fmt.Printf("Sending request: %v, 0x%x\n", pack, data)
 	}
-	n, err := h.conn.Write(req.reqresp.Bytes[:req.reqresp.RespIndex])
+	n, err := h.conn.Write(data)
 	h.bytessent += float64(n)
 	h.packssent += 1.0
 	if err != nil {
@@ -264,7 +265,10 @@ func (h *HW) returnreply() {
 			h.flyingids.remove()
 			delete(h.replied, first)
 			h.returned.add(first)
-			p.dest <- p.reqresp
+			// Need to go through all transactions and send each on their channel
+			//p.dest <- p.reqresp
+			// Below temporarily here so that p is not unused
+			p.id = 0x33ef
 			sentrep = true
 			h.returnedindex = (h.returnedindex + 1) % h.returnedsize
 			h.returnedids[h.returnedindex] = first
@@ -285,6 +289,8 @@ func (h *HW) clean() {
 }
 
 func (h *HW) closeall() {
+	// This should be updated to close the channels for each transaction that would close its channel after sending.
+	/*
 	for _, req := range h.replied {
 		close(req.dest)
 	}
@@ -294,6 +300,7 @@ func (h *HW) closeall() {
 	for _, req := range h.tosend {
 		close(req.dest)
 	}
+	*/
 }
 
 // NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
@@ -312,9 +319,10 @@ func (h *HW) Run() {
 			h.conn.Close()
 			fmt.Printf("HW%d following request to stop.\n", h.Num)
 			running = false
-		case req := <-h.incoming:
-			// Handle incoming request
-			// If there are flight slots free send and update ticker, if not queue
+		case pack := <-h.incoming:
+			// Handle sending out packet
+			// Will move status and resend requests to another channel.
+			/*
 			if req.reqresp.Out.Type == oldipbus.Status {
 				if err := req.reqresp.EncodeOut(); err != nil {
 					panic(fmt.Errorf("HW%d: %v", h.Num, err))
@@ -339,19 +347,30 @@ func (h *HW) Run() {
 					}
 					h.sendnext()
 				}
-			} else {
-				req.reqresp.Out.ID = h.nextid()
-				if err := req.reqresp.EncodeOut(); err != nil {
-					panic(fmt.Errorf("HW%d: %v", h.Num, err))
-				}
-				req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
-				h.tosend[req.reqresp.Out.ID] = req
-				err := h.queuedids.add(req.reqresp.Out.ID)
-				if err != nil {
-					panic(err)
-				}
-				h.sendnext()
+			} 
+			*/
+			// To send out status and resend requests implement a port of the above elsewhere
+
+
+			pack.id = h.nextid()
+			//req.reqresp.Out.ID = h.nextid()
+
+			// Don't need to encode data, it's already done 
+			/*
+			if err := req.reqresp.EncodeOut(); err != nil {
+				panic(fmt.Errorf("HW%d: %v", h.Num, err))
 			}
+			req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
+			*/
+
+			//h.tosend[req.reqresp.Out.ID] = req
+			//err := h.queuedids.add(req.reqresp.Out.ID)
+			h.tosend[pack.id] = pack
+			err := h.queuedids.add(pack.id)
+			if err != nil {
+				panic(err)
+			}
+			h.sendnext()
 		case rep := <-h.replies:
 			// Handle reply
 			// Match with requests in flight slots
@@ -366,6 +385,8 @@ func (h *HW) Run() {
 				h.nverbose -= 1
 			}
 			if id == 0 {
+				// Need to parse reply packet
+				/*
 				if req, ok := h.flying[id]; ok {
 					delete(h.flying, id)
 					req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
@@ -376,6 +397,7 @@ func (h *HW) Run() {
 					}
 					req.dest <- req.reqresp
 				}
+				*/
 			} else {
 				req, ok := h.flying[id]
 				if ok {
@@ -387,12 +409,15 @@ func (h *HW) Run() {
 					}
 					delete(h.flying, id)
 					h.sendnext()
+					// Need to parse reply packet
+					/*
 					req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
 					req.reqresp.RAddr = rep.RAddr
 					req.reqresp.Received = time.Now()
 					if err := req.reqresp.Decode(); err != nil {
 						panic(err)
 					}
+					*/
 					h.replied[id] = req
 					h.returnreply()
 				} else {
@@ -442,8 +467,7 @@ func (h *HW) Send(p *packet) error {
 		fmt.Printf("Not sending a packet because HW%d is stopped.\n", h.Num)
 		return fmt.Errorf("HW%d is stopped.", h.Num)
 	}
-	// Need to update to new packet
-	// h.incoming <- p
+	h.incoming <- p
 	return error(nil)
 }
 
