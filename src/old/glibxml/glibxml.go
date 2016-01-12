@@ -4,7 +4,7 @@ import (
     "data"
     "fmt"
     "github.com/jteeuwen/go-pkg-xmlx"
-    "ipbus"
+    oldipbus "old/ipbus"
     "strconv"
     "strings"
 )
@@ -126,8 +126,8 @@ type port struct {
     Description, FWInfo string
 }
 
-func (p port) Read(size uint8, pack * ipbus.Packet) {
-    tr := ipbus.MakeReadNonInc(size, p.GAddress)
+func (p port) Read(size uint8, pack * oldipbus.Packet) {
+    tr := oldipbus.MakeReadNonInc(size, p.GAddress)
     pack.Add(tr)
 }
 
@@ -199,13 +199,13 @@ func (r register) String() string {
     return s
 }
 
-func (r register) Write(data []byte, pack *ipbus.Packet) {
-    tr := ipbus.MakeWrite(r.GAddress, data)
+func (r register) Write(data []byte, pack *oldipbus.Packet) {
+    tr := oldipbus.MakeWrite(r.GAddress, data)
     pack.Add(tr)
 }
 
-func (r register) Read(size uint8, pack * ipbus.Packet) {
-    tr := ipbus.MakeRead(size, r.GAddress)
+func (r register) Read(size uint8, pack * oldipbus.Packet) {
+    tr := oldipbus.MakeRead(size, r.GAddress)
     pack.Add(tr)
 }
 
@@ -247,13 +247,13 @@ func (w word) String() string {
                        w.LAddress, w.GAddress, len(w.Masks))
 }
 
-func (w word) Read(pack * ipbus.Packet) {
-    tr := ipbus.MakeRead(1, w.GAddress)
+func (w word) Read(pack * oldipbus.Packet) {
+    tr := oldipbus.MakeRead(1, w.GAddress)
     pack.Add(tr)
 }
 
-func (w word) ReadNonInc(size uint8, pack * ipbus.Packet) {
-    tr := ipbus.MakeReadNonInc(1, w.GAddress)
+func (w word) ReadNonInc(size uint8, pack * oldipbus.Packet) {
+    tr := oldipbus.MakeReadNonInc(1, w.GAddress)
     pack.Add(tr)
 }
 
@@ -307,7 +307,7 @@ func getReads(address uint32, reqresp data.ReqResp) [][]uint32 {
     // Find the locations of the reply transactions corresponding to read 
     // requests from this memory word
     for itr, tr := range reqresp.Out.Transactions {
-        if tr.Type == ipbus.Read || tr.Type == ipbus.ReadNonInc {
+        if tr.Type == oldipbus.Read || tr.Type == oldipbus.ReadNonInc {
             correctaddr := true
             for i := 0; i < 4; i++ {
                 if addr[i] != tr.Body[i] {
@@ -340,18 +340,18 @@ func getReads(address uint32, reqresp data.ReqResp) [][]uint32 {
     return values
 }
 
-func (r word) Write(value uint32, pack * ipbus.Packet) {
+func (r word) Write(value uint32, pack * oldipbus.Packet) {
     data := []byte{0, 0, 0, 0}
     for i := uint(0); i < 4; i++ {
         shift := i * 8
         mask := uint32(0xff) << shift
         data[i] = uint8((value & mask) >> shift)
     }
-    tr := ipbus.MakeWrite(r.GAddress, data)
+    tr := oldipbus.MakeWrite(r.GAddress, data)
     pack.Add(tr)
 }
 
-func (w word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error {
+func (w word) MaskedWrite(name string, value uint32, pack * oldipbus.Packet) error {
     n, ok := w.MaskIndices[name]
     if !ok {
         return fmt.Errorf("Fail to do masked read with unknown mask named %s", name)
@@ -359,7 +359,7 @@ func (w word) MaskedWrite(name string, value uint32, pack * ipbus.Packet) error 
     return w.MaskedWriteIndex(n, value, pack)
 }
 
-func (w word) MaskedWriteIndex(n int, value uint32, pack *ipbus.Packet) error {
+func (w word) MaskedWriteIndex(n int, value uint32, pack *oldipbus.Packet) error {
     if n >= len(w.Masks) {
         return fmt.Errorf("Masked write failed, index %d out of range.", n)
     }
@@ -376,7 +376,7 @@ func (w word) MaskedWriteIndex(n int, value uint32, pack *ipbus.Packet) error {
     x = x | (0xffffffff ^ mask)
     y := value
     //fmt.Printf("Masked write of %s:%s, GAddress = 0x%x, and term = 0x%x, or = x%x.\n", w.ID, name, w.GAddress, x, y)
-    tr := ipbus.MakeRMWbits(w.GAddress, x, y)
+    tr := oldipbus.MakeRMWbits(w.GAddress, x, y)
     pack.Add(tr)
     return nil
 }

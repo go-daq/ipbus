@@ -19,23 +19,22 @@ package hw
        * Parse packet and transaction headers from received byte stream
 */
 import (
-	"crash"
 	"data"
 	"fmt"
-	"glibxml"
-	"ipbus"
+	"old/glibxml"
+	oldipbus "old/ipbus"
 	"net"
 	"time"
 )
 
 var nhw = 0
 
-func New(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs chan data.ErrPack) *HW {
+func New(num int, mod glibxml.Module, dt time.Duration, errs chan data.ErrPack) *HW {
 	raddr, err := net.ResolveUDPAddr("udp", mod.IP)
 	if err != nil {
 		panic(err)
 	}
-	hw := HW{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), exit: exit, errs: errs,
+	hw := HW{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), errs: errs,
 		Module: mod, inflight: 0, maxflight: 4, reporttime: 30 * time.Second}
 	hw.init()
 	fmt.Printf("Created new HW: %v\n", hw)
@@ -45,7 +44,6 @@ func New(num int, mod glibxml.Module, dt time.Duration, exit *crash.Exit, errs c
 type HW struct {
 	Num        int
 	replies    chan packet
-	exit       *crash.Exit
 	errs       chan data.ErrPack // Channel to send errors to whomever cares.
 	conn       *net.UDPConn      // UDP connection with the device.
 	raddr      *net.UDPAddr      // UDP address of the hardware device.
@@ -135,11 +133,11 @@ func (h *HW) handlelost() {
 	for id, req := range h.flying {
 		fmt.Printf("id = %d = 0x%x: %v\n", id, id, req)
 	}
-	status := ipbus.StatusPacket()
+	status := oldipbus.StatusPacket()
 	rc := make(chan data.ReqResp)
 	h.Send(status, rc)
 	rr := <-rc
-	statusreply := &ipbus.StatusResp{}
+	statusreply := &oldipbus.StatusResp{}
 	if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
 		panic(fmt.Errorf("Failed to parse status packet handling lost: %v", err))
 	}
@@ -166,7 +164,7 @@ func (h *HW) handlelost() {
 	}
 	if packetsent {
 		fmt.Printf("Packet sent, need to send resend request.\n")
-		resendpack := ipbus.ResendPacket(h.timeoutid)
+		resendpack := oldipbus.ResendPacket(h.timeoutid)
 		fake := make(chan data.ReqResp)
 		h.nverbose = 5
 		fmt.Printf("Sending resend request: %v\n", resendpack)
@@ -193,11 +191,11 @@ func (h *HW) handlelost() {
 // Get the device's status to set MTU and next ID.
 func (h *HW) ConfigDevice() {
 	defer h.clean()
-	status := ipbus.StatusPacket()
+	status := oldipbus.StatusPacket()
 	rc := make(chan data.ReqResp)
 	h.Send(status, rc)
 	rr := <-rc
-	statusreply := &ipbus.StatusResp{}
+	statusreply := &oldipbus.StatusResp{}
 	if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
 		panic(err)
 	}
@@ -317,14 +315,14 @@ func (h *HW) Run() {
 		case req := <-h.incoming:
 			// Handle incoming request
 			// If there are flight slots free send and update ticker, if not queue
-			if req.reqresp.Out.Type == ipbus.Status {
+			if req.reqresp.Out.Type == oldipbus.Status {
 				if err := req.reqresp.EncodeOut(); err != nil {
 					panic(fmt.Errorf("HW%d: %v", h.Num, err))
 				}
 				req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
 				h.sendpack(req)
 				h.flying[0] = req
-			} else if req.reqresp.Out.Type == ipbus.Resend {
+			} else if req.reqresp.Out.Type == oldipbus.Resend {
 				if err := req.reqresp.EncodeOut(); err != nil {
 					panic(fmt.Errorf("HW%d: %v", h.Num, err))
 				}
@@ -439,7 +437,7 @@ func (h *HW) nextid() uint16 {
 	return id
 }
 
-func (h *HW) Send(p ipbus.Packet, outp chan data.ReqResp) error {
+func (h *HW) Send(p oldipbus.Packet, outp chan data.ReqResp) error {
 	if h.stopped {
 		fmt.Printf("Not sending a packet because HW%d is stopped.\n", h.Num)
 		return fmt.Errorf("HW%d is stopped.", h.Num)

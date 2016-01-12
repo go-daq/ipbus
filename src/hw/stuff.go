@@ -1,5 +1,12 @@
 package hw
 
+import (
+	"data"
+	"fmt"
+	oldipbus "old/ipbus"
+	"net"
+)
+
 type packet struct {
 	Data  []byte
 	RAddr net.Addr
@@ -15,7 +22,7 @@ func newPacket(data []byte) packet {
 }
 
 type request struct {
-	request ipbus.Packet
+	request oldipbus.Packet
 	reqresp data.ReqResp
 	dest    chan data.ReqResp
 }
