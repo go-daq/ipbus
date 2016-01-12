@@ -56,11 +56,11 @@ func (t *Target) AllowAutoDispatch(enable bool) {
 */
 
 func (t Target) preparepackets() {
-	packs := make([]packet)
+	packs := make([]packet, 0, 8)
 	running := true
 	for running {
 		select {
-		case req = <-t.requests:
+		case req := <-t.requests:
 			if req.dispatch {
 				// Dispatch any queued full or partial packets
 				for _, p := range packs {
@@ -98,12 +98,12 @@ func (t Target) preparepackets() {
 						final := nwords == 0
 						t := transaction{req.typeid, uint8(ntoread),
 							req.addr, req.Input, req.resp,
-							req.byteslic, final}
+							req.byteslice, final}
 						p.add(t)
 					}
 				case req.typeid == write || req.typeid == writenoninc:
-					nwords := len(req.Input)
-					index := 0
+					nwords := uint(len(req.Input))
+					index := uint(0)
 					for nwords > 0 {
 						if reqspace < 3 || respspace < 1 {
 							packs = append(packs, emptypacket(control))
@@ -126,9 +126,6 @@ func (t Target) preparepackets() {
 							req.resp, req.byteslice, final}
 						p.add(t)
 						index += ntowrite
-					}
-					for nwords > 0 {
-						reqfits = reqspace >= len(req.Input)+1 && respspace >= 2
 					}
 				case req.typeid == rmwbits:
 					if reqspace < 4 || respspace < 2 {
@@ -183,7 +180,7 @@ func (t Target) Read(reg Register, nword uint) chan Response {
 	if reg.noninc {
 		tid = readnoninc
 	}
-	r := usrrequest{tid, nword, reg.Addr, []uint32{}, resp, false}
+	r := usrrequest{tid, nword, reg.Addr, []uint32{}, resp, false, false}
 	t.enqueue(r)
 	return resp
 }
@@ -195,7 +192,7 @@ func (t Target) Write(reg Register, data []uint32) chan Response {
 	if reg.noninc {
 		tid = writenoninc
 	}
-	r := usrrequest{tid, uint(len(data)), reg.Addr, data, resp, false}
+	r := usrrequest{tid, uint(len(data)), reg.Addr, data, resp, false, false}
 	t.enqueue(r)
 	return resp
 }
@@ -204,7 +201,7 @@ func (t Target) Write(reg Register, data []uint32) chan Response {
 func (t Target) RMWbits(reg Register, andterm, orterm uint32) chan Response {
 	resp := make(chan Response)
 	data := []uint32{andterm, orterm}
-	r := usrrequest{rmwbits, uint(1), reg.Addr, data, resp, false}
+	r := usrrequest{rmwbits, uint(1), reg.Addr, data, resp, false, false}
 	t.enqueue(r)
 	return resp
 }
@@ -213,7 +210,7 @@ func (t Target) RMWbits(reg Register, andterm, orterm uint32) chan Response {
 func (t Target) RMWsum(reg Register, addend uint32) chan Response {
 	resp := make(chan Response)
 	data := []uint32{addend}
-	r := usrrequest{rmwsum, uint(1), reg.Addr, data, resp, false}
+	r := usrrequest{rmwsum, uint(1), reg.Addr, data, resp, false, false}
 	t.enqueue(r)
 	return resp
 }
@@ -225,7 +222,7 @@ func (t Target) ReadB(reg Register, nword uint) chan Response {
 	if reg.noninc {
 		tid = readnoninc
 	}
-	r := usrrequest{tid, nword, reg.Addr, []uint32{}, resp, true}
+	r := usrrequest{tid, nword, reg.Addr, []uint32{}, resp, true, false}
 	t.enqueue(r)
 	return resp
 }

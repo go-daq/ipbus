@@ -7,7 +7,7 @@ import (
 
 // Supported IPbus protocol version
 const IPbusVersion = 2.0
-const protocolversion = uint8(2)
+const protocolversion = uint32(2)
 
 // Maxiumum Ethernet packet size (bytes)
 var MaxPacketSize = uint(1500)
