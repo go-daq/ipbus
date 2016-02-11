@@ -376,8 +376,12 @@ func (h *HW) Run() {
 			// If it's the oldest request send it back, otherwise queue reply
 			// If there are queued requests send one
 			// Update ticker
-			id := uint16(rep.Data[1]) << 8
-			id |= uint16(rep.Data[2])
+			err := rep.header.decode(rep.Data)
+			if err != nil {
+				// what?
+				fmt.Printf("Error decoding packet header: %v\n", err)
+			}
+			id := rep.header.pid
 			h.received.add(id)
 			if h.nverbose > 0 {
 				fmt.Printf("Received packet with ID = %d = 0x%x\n", id, id)

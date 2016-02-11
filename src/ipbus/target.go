@@ -97,9 +97,7 @@ func (t Target) preparepackets() {
 						nwords -= ntoread
 						// add read request with ntoread words
 						final := nwords == 0
-						t := transaction{req.typeid, uint8(ntoread),
-							req.addr, req.Input, req.resp,
-							req.byteslice, final}
+						t := newrequesttransaction(req.typeid, uint8(ntoread), req.addr, req.Input, req.resp, req.byteslice, final)
 						p.add(t)
 					}
 				case req.typeid == write || req.typeid == writenoninc:
@@ -121,10 +119,10 @@ func (t Target) preparepackets() {
 						nwords -= ntowrite
 						final := nwords == 0
 						// add write request with ntowrite words
-						t := transaction{req.typeid, uint8(ntowrite),
+						t := newrequesttransaction(req.typeid, uint8(ntowrite),
 							req.addr,
-							req.Input[index : index+ntowrite],
-							req.resp, req.byteslice, final}
+							req.Input[index:index+ntowrite],
+							req.resp, req.byteslice, final)
 						p.add(t)
 						index += ntowrite
 					}
@@ -134,8 +132,8 @@ func (t Target) preparepackets() {
 						p = packs[len(packs)-1]
 					}
 					// add request
-					t := transaction{rmwbits, 1, req.addr, req.Input,
-						req.resp, req.byteslice, true}
+					t := newrequesttransaction(rmwbits, 1, req.addr, req.Input,
+						req.resp, req.byteslice, true)
 					p.add(t)
 				case req.typeid == rmwsum:
 					if reqspace < 3 || respspace < 2 {
@@ -143,10 +141,9 @@ func (t Target) preparepackets() {
 						p = packs[len(packs)-1]
 					}
 					// add request
-					t := transaction{rmwsum, 1, req.addr, req.Input,
-						req.resp, req.byteslice, true}
+					t := newrequesttransaction(rmwsum, 1, req.addr, req.Input,
+						req.resp, req.byteslice, true)
 					p.add(t)
-
 				}
 			}
 		case _, ok := <-t.stop:

@@ -1,7 +1,7 @@
 package ipbus
 
 import (
-	"bytes"
+	//	"bytes"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -16,28 +16,40 @@ type Response struct {
 }
 
 type transaction struct {
-	Type                 typeID
-	NWords               uint8
+	outheader transactionheader
+	//	Type                 typeID
+	//	NWords               uint8
 	Addr                 uint32
 	Input                []uint32
 	resp                 chan Response
 	byteslice, closechan bool
 }
 
+func newrequesttransaction(tid typeID, words uint8, addr uint32, input []uint32, resp chan Response, byteslice, final bool) transaction {
+	header := transactionheader{uint8(protocolversion), 0xffff, words, tid, request}
+	trans := transaction{header, addr, input, resp, byteslice, final}
+	return trans
+}
+
 type packet struct {
+	header          packetheader
 	id              uint16
 	transactions    []transaction
 	replies         []Response
 	reqcap, respcap uint
 	reqlen, resplen uint
-	request         *bytes.Buffer
-	sent            time.Time
+	//	request         *bytes.Buffer
+	request []byte
+	sent    time.Time
 }
 
 func (p packet) Bytes() []byte {
-	b := p.request.Bytes()
-	binary.BigEndian.PutUint16(b[2:4], p.id)
-	return b
+	/*
+		b := p.request.Bytes()
+		binary.BigEndian.PutUint16(b[2:4], p.id)
+		return b
+	*/
+	return p.request
 }
 
 // Parse an IPbus reply byte stream into responses
@@ -138,16 +150,19 @@ func (p packet) send() {
 func emptypacket(pt packetType) packet {
 	trans := make([]transaction, 0, 8)
 	replies := make([]Response, 0, 8)
-	request := bytes.NewBuffer(make([]byte, 0, 1472))
-	header := uint32(0)
-	header |= protocolversion << 24
-	header |= 0xf0
-	header |= uint32(pt)
-	binary.Write(request, binary.BigEndian, header)
+	//request := bytes.NewBuffer(make([]byte, 0, 1472))
+	request := make([]byte, 0, 1472)
+	/*
+		header := uint32(0)
+		header |= protocolversion << 24
+		header |= 0xf0
+		header |= uint32(pt)
+		binary.Write(request, binary.BigEndian, header)
+	*/
 	// Normal IP packet has up to 1500 bytes. IP header is 20 bytes, UDP
 	// header is 8 bytes. This leaves 368 words for the ipbus data.
 	size := (MaxPacketSize - 28) / 4
-	return packet{0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
+	return packet{packetheader{}, 0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
 }
 
 func (p *packet) add(trans transaction) error {
@@ -156,25 +171,25 @@ func (p *packet) add(trans transaction) error {
 	// Update the reqlen and resplen
 	reqspace, respspace := p.space()
 	switch {
-	case trans.Type == read || trans.Type == readnoninc:
+	case trans.outheader.tid == read || trans.outheader.tid == readnoninc:
 		if len(trans.Input) > 0 {
 			return fmt.Errorf("Read/ReadNonInc transaction with nonzero (%d) words of input data", len(trans.Input))
 		}
-		if reqspace < 2 || respspace < uint(trans.NWords+1) {
-			return fmt.Errorf("Add %d word Read[NonInc]: insufficient space in packet.", trans.NWords)
+		if reqspace < 2 || respspace < uint(trans.outheader.words+1) {
+			return fmt.Errorf("Add %d word Read[NonInc]: insufficient space in packet.", trans.outheader.words)
 		}
 		p.reqlen += 2
-		p.resplen += uint(trans.NWords + 1)
-	case trans.Type == write || trans.Type == writenoninc:
-		if len(trans.Input) != int(trans.NWords) {
-			return fmt.Errorf("Write/WriteNonInc transaction with NWords = %d, but %d words of input data", trans.NWords, len(trans.Input))
+		p.resplen += uint(trans.outheader.words + 1)
+	case trans.outheader.tid == write || trans.outheader.tid == writenoninc:
+		if len(trans.Input) != int(trans.outheader.words) {
+			return fmt.Errorf("Write/WriteNonInc transaction with NWords = %d, but %d words of input data", trans.outheader.words, len(trans.Input))
 		}
-		if reqspace < uint(2+trans.NWords) || respspace < 1 {
-			return fmt.Errorf("Add %d word Write[NonInc]: insufficient space in packet.", trans.NWords)
+		if reqspace < uint(2+trans.outheader.words) || respspace < 1 {
+			return fmt.Errorf("Add %d word Write[NonInc]: insufficient space in packet.", trans.outheader.words)
 		}
-		p.reqlen += uint(2 + trans.NWords)
+		p.reqlen += uint(2 + trans.outheader.words)
 		p.resplen += 1
-	case trans.Type == rmwbits:
+	case trans.outheader.tid == rmwbits:
 		if len(trans.Input) != 2 {
 			return fmt.Errorf("RMWbits with %d words of input data (expect 2: AND, OR)", len(trans.Input))
 		}
@@ -183,7 +198,7 @@ func (p *packet) add(trans transaction) error {
 		}
 		p.reqlen += 4
 		p.resplen += 2
-	case trans.Type == rmwsum:
+	case trans.outheader.tid == rmwsum:
 		if len(trans.Input) != 1 {
 			return fmt.Errorf("RMWsum with %d words of input data (expect 1: ANDEND)", len(trans.Input))
 		}
@@ -195,16 +210,12 @@ func (p *packet) add(trans transaction) error {
 	}
 
 	// Fill the outgoing packet
-	header := uint32(0)
-	header |= protocolversion << 24
-	tID := len(p.transactions)
-	header |= uint32(tID) << 16
-	header |= uint32(trans.NWords) << 8
-	header |= uint32(trans.Type) << 4
-	header |= uint32(request)
-	binary.Write(p.request, binary.BigEndian, header)
-	binary.Write(p.request, binary.BigEndian, trans.Addr)
-	binary.Write(p.request, binary.BigEndian, trans.Input)
+	transhead := []byte{0, 0, 0, 0}
+	err := trans.outheader.encode(transhead, p.header.order)
+	if err != nil {
+		fmt.Printf("Error encoding transaction header: %v\n", err)
+	}
+	p.request = append(p.request, transhead...)
 	p.transactions = append(p.transactions, trans)
 	return error(nil)
 }

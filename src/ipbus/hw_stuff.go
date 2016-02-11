@@ -8,8 +8,9 @@ import (
 )
 
 type hwpacket struct {
-	Data  []byte
-	RAddr net.Addr
+	Data   []byte
+	RAddr  net.Addr
+	header packetheader
 }
 
 func emptyPacket() hwpacket {
