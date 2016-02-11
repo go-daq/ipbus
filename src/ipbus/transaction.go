@@ -151,7 +151,7 @@ func emptypacket(pt packetType) packet {
 	trans := make([]transaction, 0, 8)
 	replies := make([]Response, 0, 8)
 	//request := bytes.NewBuffer(make([]byte, 0, 1472))
-	request := make([]byte, 0, 1472)
+	request := make([]byte, 4, 1472)
 	/*
 		header := uint32(0)
 		header |= protocolversion << 24
@@ -216,12 +216,22 @@ func (p *packet) add(trans transaction) error {
 		fmt.Printf("Error encoding transaction header: %v\n", err)
 	}
 	p.request = append(p.request, transhead...)
+	data := make([]byte, 4*len(trans.Input))
+	for i, val := range trans.Input {
+		p.header.order.PutUint32(data[i*4:], val)
+	}
+	p.request = append(p.request, data...)
 	p.transactions = append(p.transactions, trans)
 	return error(nil)
 }
 
 func (p packet) space() (uint, uint) {
 	return p.reqcap - p.reqlen, p.respcap - p.reqlen
+}
+
+func (p *packet) writeheader(id uint16) error {
+	p.header.pid = id
+	return p.header.encode(p.request)
 }
 
 type usrrequest struct {

@@ -351,7 +351,8 @@ func (h *HW) Run() {
 			*/
 			// To send out status and resend requests implement a port of the above elsewhere
 
-			pack.id = h.nextid()
+			pack.writeheader(h.nextid())
+			//pack.id = h.nextid()
 			//req.reqresp.Out.ID = h.nextid()
 
 			// Don't need to encode data, it's already done
