@@ -27,7 +27,7 @@ type Target struct {
 	nextoutid, nextinid uint32
 	requests            chan usrrequest
 	finishpacket, stop  chan bool
-	hw					HW
+	hw                  HW
 }
 
 // Create a new target by parsing an XML file description.

@@ -3,8 +3,8 @@ package ipbus
 import (
 	"data"
 	"fmt"
-	oldipbus "old/ipbus"
 	"net"
+	oldipbus "old/ipbus"
 )
 
 type hwpacket struct {

@@ -21,9 +21,9 @@ package ipbus
 import (
 	"data"
 	"fmt"
+	"net"
 	"old/glibxml"
 	oldipbus "old/ipbus"
-	"net"
 	"time"
 )
 
@@ -291,15 +291,15 @@ func (h *HW) clean() {
 func (h *HW) closeall() {
 	// This should be updated to close the channels for each transaction that would close its channel after sending.
 	/*
-	for _, req := range h.replied {
-		close(req.dest)
-	}
-	for _, req := range h.flying {
-		close(req.dest)
-	}
-	for _, req := range h.tosend {
-		close(req.dest)
-	}
+		for _, req := range h.replied {
+			close(req.dest)
+		}
+		for _, req := range h.flying {
+			close(req.dest)
+		}
+		for _, req := range h.tosend {
+			close(req.dest)
+		}
 	*/
 }
 
@@ -323,44 +323,43 @@ func (h *HW) Run() {
 			// Handle sending out packet
 			// Will move status and resend requests to another channel.
 			/*
-			if req.reqresp.Out.Type == oldipbus.Status {
-				if err := req.reqresp.EncodeOut(); err != nil {
-					panic(fmt.Errorf("HW%d: %v", h.Num, err))
-				}
-				req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
-				h.sendpack(req)
-				h.flying[0] = req
-			} else if req.reqresp.Out.Type == oldipbus.Resend {
-				if err := req.reqresp.EncodeOut(); err != nil {
-					panic(fmt.Errorf("HW%d: %v", h.Num, err))
-				}
-				req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
-				h.resent = req.reqresp.Out.ID
-				if h.handlinglost {
-					h.sendpack(req)
-				} else {
-					fmt.Printf("Received a resend request but not hanlding lost packet, treating it like normal.\n")
-					h.tosend[req.reqresp.Out.ID] = req
-					err := h.queuedids.add(req.reqresp.Out.ID)
-					if err != nil {
-						panic(err)
+				if req.reqresp.Out.Type == oldipbus.Status {
+					if err := req.reqresp.EncodeOut(); err != nil {
+						panic(fmt.Errorf("HW%d: %v", h.Num, err))
 					}
-					h.sendnext()
+					req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
+					h.sendpack(req)
+					h.flying[0] = req
+				} else if req.reqresp.Out.Type == oldipbus.Resend {
+					if err := req.reqresp.EncodeOut(); err != nil {
+						panic(fmt.Errorf("HW%d: %v", h.Num, err))
+					}
+					req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
+					h.resent = req.reqresp.Out.ID
+					if h.handlinglost {
+						h.sendpack(req)
+					} else {
+						fmt.Printf("Received a resend request but not hanlding lost packet, treating it like normal.\n")
+						h.tosend[req.reqresp.Out.ID] = req
+						err := h.queuedids.add(req.reqresp.Out.ID)
+						if err != nil {
+							panic(err)
+						}
+						h.sendnext()
+					}
 				}
-			} 
 			*/
 			// To send out status and resend requests implement a port of the above elsewhere
-
 
 			pack.id = h.nextid()
 			//req.reqresp.Out.ID = h.nextid()
 
-			// Don't need to encode data, it's already done 
+			// Don't need to encode data, it's already done
 			/*
-			if err := req.reqresp.EncodeOut(); err != nil {
-				panic(fmt.Errorf("HW%d: %v", h.Num, err))
-			}
-			req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
+				if err := req.reqresp.EncodeOut(); err != nil {
+					panic(fmt.Errorf("HW%d: %v", h.Num, err))
+				}
+				req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
 			*/
 
 			//h.tosend[req.reqresp.Out.ID] = req
@@ -387,16 +386,16 @@ func (h *HW) Run() {
 			if id == 0 {
 				// Need to parse reply packet
 				/*
-				if req, ok := h.flying[id]; ok {
-					delete(h.flying, id)
-					req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
-					req.reqresp.RAddr = rep.RAddr
-					req.reqresp.Received = time.Now()
-					if err := req.reqresp.Decode(); err != nil {
-						panic(err)
+					if req, ok := h.flying[id]; ok {
+						delete(h.flying, id)
+						req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
+						req.reqresp.RAddr = rep.RAddr
+						req.reqresp.Received = time.Now()
+						if err := req.reqresp.Decode(); err != nil {
+							panic(err)
+						}
+						req.dest <- req.reqresp
 					}
-					req.dest <- req.reqresp
-				}
 				*/
 			} else {
 				req, ok := h.flying[id]
@@ -411,12 +410,12 @@ func (h *HW) Run() {
 					h.sendnext()
 					// Need to parse reply packet
 					/*
-					req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
-					req.reqresp.RAddr = rep.RAddr
-					req.reqresp.Received = time.Now()
-					if err := req.reqresp.Decode(); err != nil {
-						panic(err)
-					}
+						req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
+						req.reqresp.RAddr = rep.RAddr
+						req.reqresp.Received = time.Now()
+						if err := req.reqresp.Decode(); err != nil {
+							panic(err)
+						}
 					*/
 					h.replied[id] = req
 					h.returnreply()

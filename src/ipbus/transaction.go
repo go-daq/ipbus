@@ -25,12 +25,13 @@ type transaction struct {
 }
 
 type packet struct {
-	id				uint16
+	id              uint16
 	transactions    []transaction
+	replies         []Response
 	reqcap, respcap uint
 	reqlen, resplen uint
 	request         *bytes.Buffer
-	sent			time.Time
+	sent            time.Time
 }
 
 func (p packet) Bytes() []byte {
@@ -39,8 +40,104 @@ func (p packet) Bytes() []byte {
 	return b
 }
 
+// Parse an IPbus reply byte stream into responses
+func (p *packet) parse(data []byte) error {
+	packheader, err := newPacketHeader(data)
+	if err != nil {
+		for _ = range p.transactions {
+			resp := Response{err, 0xe, nil, nil}
+			p.replies = append(p.replies, resp)
+
+		}
+		return err
+	}
+	if packheader.ptype == control {
+		data = data[4:]
+		for len(data) > 0 {
+			transheader, err := newTransactionHeader(data, packheader.order)
+			trans := p.transactions[transheader.id]
+			data = data[4:]
+			resp := Response{err, transheader.code, nil, nil}
+			if err == nil { // heard successfully parsed
+				if transheader.code == success {
+					switch {
+					case transheader.tid == read || transheader.tid == readnoninc:
+						if trans.byteslice {
+							resp.DataB = data[:transheader.words*4]
+						} else {
+							resp.Data = bytes2uint32s(data[:transheader.words*4], packheader.order)
+						}
+						data = data[transheader.words*4:]
+					case transheader.tid == write || transheader.tid == writenoninc:
+						if trans.byteslice {
+							resp.DataB = []byte{}
+						} else {
+							resp.Data = []uint32{}
+						}
+					case transheader.tid == rmwbits || transheader.tid == rmwsum:
+						if trans.byteslice {
+							resp.DataB = data[:4]
+						} else {
+							resp.Data = bytes2uint32s(data[:4], packheader.order)
+						}
+						data = data[4:]
+					}
+				} else { // info code is not success
+					resp.Err = fmt.Errorf("IPbus error: %s", transactionerrs[transheader.code])
+					// What do I do if there was an error, stop parsing now?
+					// Does it continue with replies to following transactions?
+					// Need to check IPbus docs.
+				}
+			}
+			p.replies = append(p.replies, resp)
+		}
+		if len(p.replies) < len(p.transactions) {
+			err := fmt.Errorf("Did not receive sufficient bytes.")
+			for i := len(p.replies); i < len(p.transactions); i++ {
+				resp := Response{err, 0xe, nil, nil}
+				p.replies = append(p.replies, resp)
+			}
+		}
+		return nil
+	} else if packheader.ptype == status {
+		// Need to do something special to parse status packet
+
+	} else if packheader.ptype == resend {
+		return fmt.Errorf("IPbus client shouldn't receive a resend request type packet.")
+	} else {
+		return fmt.Errorf("Packet has invalid type: 0x%x", packheader.ptype)
+	}
+	return nil
+}
+
+func byteorder(header []byte) (binary.ByteOrder, error) {
+	if len(header) < 4 {
+		return nil, fmt.Errorf("Cannot identify byte order, header (0x%x) too short", header)
+	}
+	v := uint8(protocolversion) << 4
+	boq := uint8(0xf0) // byte order qualifier
+	if (header[0] == v) && ((header[3] & boq) == boq) {
+		return binary.BigEndian, nil
+	} else if (header[3] == v) && ((header[0] & boq) == boq) {
+		return binary.LittleEndian, nil
+	} else {
+		return nil, fmt.Errorf("Invalid header: %x, cannot find endianess.", header)
+	}
+}
+
+// Send replies back over correct channels.
+func (p packet) send() {
+	for i, tr := range p.transactions {
+		tr.resp <- p.replies[i]
+		if tr.closechan {
+			close(tr.resp)
+		}
+	}
+}
+
 func emptypacket(pt packetType) packet {
 	trans := make([]transaction, 0, 8)
+	replies := make([]Response, 0, 8)
 	request := bytes.NewBuffer(make([]byte, 0, 1472))
 	header := uint32(0)
 	header |= protocolversion << 24
@@ -50,7 +147,7 @@ func emptypacket(pt packetType) packet {
 	// Normal IP packet has up to 1500 bytes. IP header is 20 bytes, UDP
 	// header is 8 bytes. This leaves 368 words for the ipbus data.
 	size := (MaxPacketSize - 28) / 4
-	return packet{0, trans, size, size, 0, 0, request, time.Time{}} // For normal packet
+	return packet{0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
 }
 
 func (p *packet) add(trans transaction) error {
