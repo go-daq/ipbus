@@ -265,10 +265,8 @@ func (h *HW) returnreply() {
 			h.flyingids.remove()
 			delete(h.replied, first)
 			h.returned.add(first)
-			// Need to go through all transactions and send each on their channel
-			//p.dest <- p.reqresp
-			// Below temporarily here so that p is not unused
-			p.id = 0x33ef
+			// Send all the transactions in the packet to their respective channels
+			p.send()
 			sentrep = true
 			h.returnedindex = (h.returnedindex + 1) % h.returnedsize
 			h.returnedids[h.returnedindex] = first
@@ -422,6 +420,10 @@ func (h *HW) Run() {
 							panic(err)
 						}
 					*/
+					err := req.parse(rep.Data)
+					if err != nil {
+						fmt.Printf("Error parsing reply: %v\n", err)
+					}
 					h.replied[id] = req
 					h.returnreply()
 				} else {
