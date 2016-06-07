@@ -1,7 +1,6 @@
 package ipbus
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -27,12 +26,12 @@ func TestParserMissingTarget(t *testing.T) {
 func TestParser(t *testing.T) {
 	cm, err := NewCM("testconnections.xml")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 		return
 	}
 	target, err := cm.Target("GLIB")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 		return
 	}
 	expectedregs := make(map[string]bool)
@@ -52,13 +51,9 @@ func TestParser(t *testing.T) {
 	expectedregs["timing.counter"] = true
 	expectedregs["timing.counter.top"] = true
 	expectedregs["timing.counter.bottom"] = true
-	if testing.Verbose() {
-		fmt.Printf("Regs:\n")
-	}
+	t.Log("Regs:\n")
 	for _, reg := range target.Regs {
-		if testing.Verbose() {
-			fmt.Printf("\t%v\n", reg)
-		}
+		t.Logf("\t%v\n", reg)
 		if !expectedregs[reg.Name] {
 			t.Error("Unexpected register found: ", reg.Name)
 		}
