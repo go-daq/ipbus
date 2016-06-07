@@ -14,15 +14,15 @@ const protocolversion = uint32(2)
 var MaxPacketSize = uint(1500)
 
 // Information codes
-type infoCode uint8
+type InfoCode uint8
 
-const success infoCode = 0x0
-const badHeader infoCode = 0x1
-const busReadError infoCode = 0x4
-const busWriteError infoCode = 0x5
-const busReadTimeout infoCode = 0x6
-const busWriteTimeout infoCode = 0x7
-const request infoCode = 0xf
+const Success InfoCode = 0x0
+const BadHeader InfoCode = 0x1
+const BusReadError InfoCode = 0x4
+const BusWriteError InfoCode = 0x5
+const BusReadTimeout InfoCode = 0x6
+const busWriteTimeout InfoCode = 0x7
+const Request InfoCode = 0xf
 
 var transactionerrs = []string{"Success", "Bad Header", "Bus Read Error", "Bus Write Error", "Bus Read Timeout", "bus Write Timeout"}
 
@@ -120,7 +120,7 @@ type transactionheader struct {
 	id      uint16
 	words   uint8
 	tid     typeID
-	code    infoCode
+	code    InfoCode
 }
 
 func newTransactionHeader(data []byte, order binary.ByteOrder) (transactionheader, error) {
@@ -139,7 +139,7 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 		th.id |= uint16(data[0]&0x0f) << 8
 		th.words = uint8(data[2])
 		th.tid = typeID((data[3] & 0xf0) >> 4)
-		th.code = infoCode(data[3] & 0x0f)
+		th.code = InfoCode(data[3] & 0x0f)
 		return nil
 	} else if order == binary.LittleEndian {
 		th.version = uint8(data[3] >> 4)
@@ -147,7 +147,7 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 		th.id |= uint16(data[3]&0x0f) << 8
 		th.words = uint8(data[1])
 		th.tid = typeID((data[0] & 0xf0) >> 4)
-		th.code = infoCode(data[0] & 0x0f)
+		th.code = InfoCode(data[0] & 0x0f)
 		return nil
 	} else {
 		return fmt.Errorf("Invalid byte order to decode transaction header.")

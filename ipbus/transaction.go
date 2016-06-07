@@ -10,7 +10,7 @@ import (
 // Response to a control transaction
 type Response struct {
 	Err   error
-	Code  infoCode
+	Code  InfoCode
 	Data  []uint32
 	DataB []byte
 }
@@ -26,7 +26,7 @@ type transaction struct {
 }
 
 func newrequesttransaction(tid typeID, words uint8, addr uint32, input []uint32, resp chan Response, byteslice, final bool) transaction {
-	header := transactionheader{uint8(protocolversion), 0xffff, words, tid, request}
+	header := transactionheader{uint8(protocolversion), 0xffff, words, tid, Request}
 	trans := transaction{header, addr, input, resp, byteslice, final}
 	return trans
 }
@@ -71,7 +71,7 @@ func (p *packet) parse(data []byte) error {
 			data = data[4:]
 			resp := Response{err, transheader.code, nil, nil}
 			if err == nil { // heard successfully parsed
-				if transheader.code == success {
+				if transheader.code == Success {
 					switch {
 					case transheader.tid == read || transheader.tid == readnoninc:
 						if trans.byteslice {
