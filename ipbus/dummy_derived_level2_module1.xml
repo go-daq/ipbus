@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<node address="0x10010" class="DummyChildNode">
+    <node id="REG" address="0x0001" permission="rw" tags="test"/>
+
+    <node id="MEM" address="0x0002" permission="rw" mode="incremental" size="262144" tags="test" />
+
+</node>

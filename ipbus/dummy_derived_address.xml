@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<node>
+
+  <node id="DERIVEDNODE" class="DummyParentNode" address="0x0000">
+    <node id="REG" address="0x0001" />
+    <node id="REG_WRITE_ONLY" address="0x0003" permission="w"/>
+
+    <node id="REG_UPPER_MASK" address="0x0004" mask="0xffff0000" permission="rw"/>
+    <node id="REG_LOWER_MASK" address="0x0004" mask="0x0000ffff" permission="rw"/>
+  </node>
+
+  <node id="DERIVEDMODULE1"   module="file://dummy_derived_level2_module1.xml" address="0x0010"/>
+  <node id="DERIVEDMODULE2"   module="file://dummy_derived_level2_module2.xml" address="0x0030"/>
+  <node id="DERIVEDMODULE3"   module="file://dummy_derived_level2_module3.xml" address="0x0050"/>
+  <node id="DERIVEDMODULE4"   module="file://dummy_derived_level3_class.xml" class="DummyChildNode" address="0x0060"/>
+
+  <node id="BADNODE" class="BadlyNamedDerivedNode" address="0x0100">
+    <node id="REG" address="0x0001" />
+    <node id="REG_WRITE_ONLY" address="0x0003" permission="w"/>
+
+    <node id="REG_UPPER_MASK" address="0x0004" mask="0xffff0000" permission="rw"/>
+    <node id="REG_LOWER_MASK" address="0x0004" mask="0x0000ffff" permission="rw"/>
+  </node>  
+
+</node>
+
