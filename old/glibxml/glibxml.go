@@ -1,10 +1,10 @@
 package glibxml
 
 import (
-    "data"
+    "bitbucket.org/NickRyder/goipbus/old/data"
     "fmt"
     "github.com/jteeuwen/go-pkg-xmlx"
-    oldipbus "old/ipbus"
+    oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
     "strconv"
     "strings"
 )

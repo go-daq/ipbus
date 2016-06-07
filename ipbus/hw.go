@@ -19,11 +19,11 @@ package ipbus
        * Parse packet and transaction headers from received byte stream
 */
 import (
-	"data"
+	"bitbucket.org/NickRyder/goipbus/old/data"
 	"fmt"
 	"net"
-	"old/glibxml"
-	oldipbus "old/ipbus"
+	"bitbucket.org/NickRyder/goipbus/old/glibxml"
+	oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
 	"time"
 )
 

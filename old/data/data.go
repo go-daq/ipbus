@@ -2,7 +2,7 @@ package data
 
 import (
     "fmt"
-    "old/ipbus"
+    "bitbucket.org/NickRyder/goipbus/old/ipbus"
     "net"
     "os/exec"
     "runtime"
