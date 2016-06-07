@@ -1,11 +1,11 @@
 package ipbus
 
 import (
-	"math/rand"
+	//"math/rand"
 	"testing"
 )
 
-const failunwritten = true 
+const failunwritten = false
 
 // Ensure that creating a new target times out when there's no target present.
 func TestTimeout(t *testing.T) {
