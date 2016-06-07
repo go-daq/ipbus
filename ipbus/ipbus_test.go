@@ -17,7 +17,6 @@ func TestTimeout(t *testing.T) {
 
 // Test single word read and write.
 func TestSingleReadWrite(t *testing.T) {
-	/*
 	dummy := newdummy(50002)
 	if err := dummy.Start(); err != nil {
 		t.Error(err)
@@ -26,7 +25,6 @@ func TestSingleReadWrite(t *testing.T) {
 	if err := dummy.Stop(); err != nil {
 		t.Error(err)
 	}
-	*/
 	if failunwritten {
 		t.Errorf("Test function not yet implemented.")
 	}
@@ -42,6 +40,42 @@ func TestBlockReadWrite(t *testing.T) {
 
 // Test that the library returns correct errors when going against target's permissions.
 func TestPermissions(t *testing.T) {
+	cm, err := NewCM("dummy_connections.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := cm.Target("dummy.udp2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeonlyreg, ok := target.Regs["REG_WRITE_ONLY"]
+	if !ok {
+		t.Fatalf("Failed to find `REG_WRITE_ONLY` register.")
+	}
+	readonlyreg, ok := target.Regs["REG_READ_ONLY"]
+	if !ok {
+		t.Fatalf("Failed to find `REG_READ_ONLY` register.")
+	}
+	t.Logf("Read-only: %v, write-only: %v\n", readonlyreg, writeonlyreg)
+
+	t.Log("Tring to read from a write-only regiser.")
+	/*
+	respchan := target.Read(writeonlyreg, 1)
+	target.Dispatch()
+	resp := <-respchan
+	if resp.Err == nil || resp.Code != BusReadError {
+		t.Errorf("Expected permission fail when reading write-only register. Err = %v, code = %v.\n", resp.Err, resp.Code)
+	}
+	*/
+	t.Log("Trying to write to a read-only register.")
+	/*
+	respchan = target.Write(readonlyreg, []uint32{0})
+	target.Dispatch()
+	resp = <-respchan
+	if resp.Err == nil || resp.Code != BusWriteError {
+		t.Errorf("Expected permission fail when writing read-only register. Err = %v, code = %v.\n", resp.Err, resp.Code)
+	}
+	*/
 
 	if failunwritten {
 		t.Errorf("Test function not yet implemented.")
