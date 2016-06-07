@@ -1,20 +1,20 @@
 package ipbus
 
 /*
-   HW is the interface to the hardware device. There should only be a single
-   HW instance per device. HW should receive all the IPbus packets to send
+   hw is the interface to the hardware device. There should only be a single
+   hw instance per device. hw should receive all the IPbus packets to send
    to the device. It receives packets from the device and sends then back
-   to the originator via a channel supplyed by the originator. The HW instance
+   to the originator via a channel supplyed by the originator. The hw instance
    handles lost UDP packets.
 
    The user supplied packages are handled sequentially. This should simplify
    checking for lost packets. For SoLid operation this should be OK.
    The incoming request is a buffered channel so that users are not blocked
    waiting for packets to be sent. If the incoming packets have a non zero
-   transaction ID then the HW instance updates them to be the next ID expected
+   transaction ID then the hw instance updates them to be the next ID expected
    by the hardware device.
 
-   HW requires the following IPbus functionality:
+   hw requires the following IPbus functionality:
        * Encode packet in byte stream to send
        * Parse packet and transaction headers from received byte stream
 */
@@ -29,19 +29,19 @@ import (
 
 var nhw = 0
 
-func New(num int, mod glibxml.Module, dt time.Duration, errs chan data.ErrPack) *HW {
+func newhw(num int, mod glibxml.Module, dt time.Duration, errs chan data.ErrPack) *hw {
 	raddr, err := net.ResolveUDPAddr("udp", mod.IP)
 	if err != nil {
 		panic(err)
 	}
-	hw := HW{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), errs: errs,
+	hw := hw{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), errs: errs,
 		Module: mod, inflight: 0, maxflight: 4, reporttime: 30 * time.Second}
 	hw.init()
-	fmt.Printf("Created new HW: %v\n", hw)
+	fmt.Printf("Created new hw: %v\n", hw)
 	return &hw
 }
 
-type HW struct {
+type hw struct {
 	Num        int
 	replies    chan hwpacket
 	errs       chan data.ErrPack // Channel to send errors to whomever cares.
@@ -53,7 +53,7 @@ type HW struct {
 	nextID, timeoutid uint16 // The packet ID expected next by the hardware.
 	mtu               uint32 // The Maxmimum transmission unit is not currently used,
 	// but defines the largest packet size (in bytes) to be
-	// sent. It is the HW interface's responsibility to
+	// sent. It is the hw interface's responsibility to
 	// ensure that sent requests and their replies will not
 	// overrun this bound. This is not currently implemented.
 	Module glibxml.Module // Addresses of registers, ports, etc.
@@ -77,7 +77,7 @@ type HW struct {
 	handlinglost                bool
 }
 
-func (h *HW) init() {
+func (h *hw) init() {
 	h.replies = make(chan hwpacket, 100)
 	h.tosend = make(map[uint16]*packet)
 	h.flying = make(map[uint16]*packet)
@@ -95,12 +95,12 @@ func (h *HW) init() {
 	h.returned = newTracker(16)
 }
 
-func (h HW) String() string {
-	return fmt.Sprintf("HW%d: in = %p, RAddr = %v, dt = %v", h.Num, &h.tosend, h.raddr, h.waittime)
+func (h hw) String() string {
+	return fmt.Sprintf("hw%d: in = %p, RAddr = %v, dt = %v", h.Num, &h.tosend, h.raddr, h.waittime)
 }
 
-// Connect to HW's UDP socket.
-func (h *HW) config() error {
+// Connect to hw's UDP socket.
+func (h *hw) config() error {
 	err := error(nil)
 	if h.conn, err = net.DialUDP("udp", nil, h.raddr); err != nil {
 		return err
@@ -108,7 +108,7 @@ func (h *HW) config() error {
 	return error(nil)
 }
 
-func (h *HW) updatetimeout() {
+func (h *hw) updatetimeout() {
 	if h.inflight > 0 {
 		first, ok := h.flyingids.secondoldest()
 		if ok {
@@ -120,7 +120,7 @@ func (h *HW) updatetimeout() {
 	}
 }
 
-func (h *HW) handlelost() {
+func (h *hw) handlelost() {
 	defer h.clean()
 	h.timedout.Stop()
 	h.handlinglost = true
@@ -189,7 +189,7 @@ func (h *HW) handlelost() {
 }
 
 // Get the device's status to set MTU and next ID.
-func (h *HW) ConfigDevice() {
+func (h *hw) ConfigDevice() {
 	defer h.clean()
 	//status := oldipbus.StatusPacket()
 	rc := make(chan data.ReqResp)
@@ -206,7 +206,7 @@ func (h *HW) ConfigDevice() {
 }
 
 // Send the next queued packet if there are slots available
-func (h *HW) sendnext() error {
+func (h *hw) sendnext() error {
 	err := error(nil)
 	for h.inflight < h.maxflight && len(h.tosend) > 0 {
 		first, ok := h.queuedids.oldest()
@@ -232,11 +232,11 @@ func (h *HW) sendnext() error {
 	return err
 }
 
-func (h *HW) SetVerbose(n int) {
+func (h *hw) SetVerbose(n int) {
 	h.nverbose = n
 }
 
-func (h *HW) sendpack(pack *packet) error {
+func (h *hw) sendpack(pack *packet) error {
 	//fmt.Printf("Sending packet with ID = %d\n", req.reqresp.Out.ID)
 	h.sentout.add(pack.id)
 	data := pack.Bytes()
@@ -252,7 +252,7 @@ func (h *HW) sendpack(pack *packet) error {
 	return error(nil)
 }
 
-func (h *HW) returnreply() {
+func (h *hw) returnreply() {
 	sentrep := true
 	for sentrep {
 		sentrep = false
@@ -274,10 +274,10 @@ func (h *HW) returnreply() {
 	}
 }
 
-func (h *HW) clean() {
+func (h *hw) clean() {
 	if r := recover(); r != nil {
 		if err, ok := r.(error); ok {
-			fmt.Printf("HW%d caught panic: %v.\n", h.Num, err)
+			fmt.Printf("hw%d caught panic: %v.\n", h.Num, err)
 			h.stopped = true
 			h.closeall()
 			ep := data.MakeErrPack(err)
@@ -286,7 +286,7 @@ func (h *HW) clean() {
 	}
 }
 
-func (h *HW) closeall() {
+func (h *hw) closeall() {
 	// This should be updated to close the channels for each transaction that would close its channel after sending.
 	/*
 		for _, req := range h.replied {
@@ -302,7 +302,7 @@ func (h *HW) closeall() {
 }
 
 // NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
-func (h *HW) Run() {
+func (h *hw) Run() {
 	defer h.clean()
 	if err := h.config(); err != nil {
 		panic(err)
@@ -315,7 +315,7 @@ func (h *HW) Run() {
 		select {
 		case <-h.Stop:
 			h.conn.Close()
-			fmt.Printf("HW%d following request to stop.\n", h.Num)
+			fmt.Printf("hw%d following request to stop.\n", h.Num)
 			running = false
 		case pack := <-h.incoming:
 			// Handle sending out packet
@@ -323,14 +323,14 @@ func (h *HW) Run() {
 			/*
 				if req.reqresp.Out.Type == oldipbus.Status {
 					if err := req.reqresp.EncodeOut(); err != nil {
-						panic(fmt.Errorf("HW%d: %v", h.Num, err))
+						panic(fmt.Errorf("hw%d: %v", h.Num, err))
 					}
 					req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
 					h.sendpack(req)
 					h.flying[0] = req
 				} else if req.reqresp.Out.Type == oldipbus.Resend {
 					if err := req.reqresp.EncodeOut(); err != nil {
-						panic(fmt.Errorf("HW%d: %v", h.Num, err))
+						panic(fmt.Errorf("hw%d: %v", h.Num, err))
 					}
 					req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
 					h.resent = req.reqresp.Out.ID
@@ -356,7 +356,7 @@ func (h *HW) Run() {
 			// Don't need to encode data, it's already done
 			/*
 				if err := req.reqresp.EncodeOut(); err != nil {
-					panic(fmt.Errorf("HW%d: %v", h.Num, err))
+					panic(fmt.Errorf("hw%d: %v", h.Num, err))
 				}
 				req.reqresp.Bytes = req.reqresp.Bytes[:req.reqresp.RespIndex]
 			*/
@@ -430,13 +430,13 @@ func (h *HW) Run() {
 					if id == h.resent {
 						fmt.Printf("Received a resent packet with ID = %d, but not found ID in h.flying.\n", id)
 					} else {
-						panic(fmt.Errorf("HW%d: Received packet with ID = %d, no match in %v", h.Num, id, h.inflight))
+						panic(fmt.Errorf("hw%d: Received packet with ID = %d, no match in %v", h.Num, id, h.inflight))
 					}
 				}
 			}
 		case <-h.timedout.C:
 			// Handle timeout on oldest packet in flight
-			fmt.Printf("HW%d: lost a packet :(\nSent ID log: %v\nqueued ID log: %v\nh.nextID = %d", h.Num, h.flyingids, h.queuedids, h.nextID)
+			fmt.Printf("hw%d: lost a packet :(\nSent ID log: %v\nqueued ID log: %v\nh.nextID = %d", h.Num, h.flyingids, h.queuedids, h.nextID)
 			go h.handlelost()
 		case <-reportticker.C:
 			dt := h.reporttime.Seconds()
@@ -444,7 +444,7 @@ func (h *HW) Run() {
 			recvrate := h.bytesreceived / dt / 1e6
 			psentrate := h.packssent / dt / 1e3
 			precvrate := h.packsreceived / dt / 1e3
-			fmt.Printf("HW%d sent = %0.2f kHz, %0.2f MB/s, received = %0.2f kHz, %0.2f MB/s\n", h.Num, psentrate, sentrate, precvrate, recvrate)
+			fmt.Printf("hw%d sent = %0.2f kHz, %0.2f MB/s, received = %0.2f kHz, %0.2f MB/s\n", h.Num, psentrate, sentrate, precvrate, recvrate)
 			h.bytessent = 0.0
 			h.bytesreceived = 0.0
 			h.packssent = 0.0
@@ -458,7 +458,7 @@ func (h *HW) Run() {
    which will receive the reply.
 */
 
-func (h *HW) nextid() uint16 {
+func (h *hw) nextid() uint16 {
 	id := h.nextID
 	if h.nextID == 65535 {
 		h.nextID = 1
@@ -468,17 +468,17 @@ func (h *HW) nextid() uint16 {
 	return id
 }
 
-func (h *HW) Send(p *packet) error {
+func (h *hw) Send(p *packet) error {
 	if h.stopped {
-		fmt.Printf("Not sending a packet because HW%d is stopped.\n", h.Num)
-		return fmt.Errorf("HW%d is stopped.", h.Num)
+		fmt.Printf("Not sending a packet because hw%d is stopped.\n", h.Num)
+		return fmt.Errorf("hw%d is stopped.", h.Num)
 	}
 	h.incoming <- p
 	return error(nil)
 }
 
 // Send a packet out
-func (h *HW) send(data chan *hwpacket, errs chan error) {
+func (h *hw) send(data chan *hwpacket, errs chan error) {
 	running := true
 	for running {
 		p, ok := <-data
@@ -489,14 +489,14 @@ func (h *HW) send(data chan *hwpacket, errs chan error) {
 		fmt.Printf("Sent a packet\n")
 		n, err := h.conn.Write(p.Data)
 		if err != nil {
-			errs <- fmt.Errorf("HW%d sent %d byte of data: %v\n", h.Num, n, err)
+			errs <- fmt.Errorf("hw%d sent %d byte of data: %v\n", h.Num, n, err)
 		}
 	}
 
 }
 
 /*
-func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
+func (h *hw) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 //	   if p.ID == 1 {
 //	       fmt.Printf("Sending packet with ID = 1: %v\n", p)
 //	   }
@@ -507,7 +507,7 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 		return rr, err
 	}
 	// Send outgoing packet, timestamp ReqResp sent
-	//fmt.Printf("HW %d: Sending packet %v to %v: %x\n", h.Num, rr.Out, h.conn.RemoteAddr(), rr.Bytes[:rr.RespIndex])
+	//fmt.Printf("hw %d: Sending packet %v to %v: %x\n", h.Num, rr.Out, h.conn.RemoteAddr(), rr.Bytes[:rr.RespIndex])
 	n, err := h.conn.Write(rr.Bytes[:rr.RespIndex])
 	if err != nil {
 		return rr, err
@@ -517,17 +517,17 @@ func (h *HW) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
 	}
 	rr.Sent = time.Now()
 	if p.Type == ipbus.Resend {
-        fmt.Printf("HW%d: Sent resend request at %v: 0x%x\n", h.Num, rr.Sent, rr.Bytes[:rr.RespIndex])
+        fmt.Printf("hw%d: Sent resend request at %v: 0x%x\n", h.Num, rr.Sent, rr.Bytes[:rr.RespIndex])
 	}
 	if h.nverbose > 0 {
-		fmt.Printf("HW%d: sent packet with ID = %d = 0x%x\n", h.Num, rr.Out.ID, rr.Out.ID)
+		fmt.Printf("hw%d: sent packet with ID = %d = 0x%x\n", h.Num, rr.Out.ID, rr.Out.ID)
 	}
 	return rr, error(nil)
 }
 */
 
 // Receive incoming packets
-func (h *HW) receive() {
+func (h *hw) receive() {
 	defer h.clean()
 	running := true
 	for running {
@@ -537,7 +537,7 @@ func (h *HW) receive() {
 		h.packsreceived += 1.0
 		if err != nil {
 			running = false
-			fmt.Printf("HW%d not receiving as connection closed.\n", h.Num)
+			fmt.Printf("hw%d not receiving as connection closed.\n", h.Num)
 		} else {
 			if h.nverbose > 0 {
 				fmt.Printf("Received a packet of %d bytes: 0x%x.\n", n, p.Data[:n])
