@@ -5,8 +5,36 @@ import (
 	"testing"
 )
 
+func TestParserMissingFile(t *testing.T) {
+	_, err := NewCM("missing.xml")
+	if err == nil {
+		t.Errorf("No error when trying to access a missing connection file.")
+	}
+}
+
+func TestParserMissingTarget(t *testing.T) {
+	cm, err := NewCM("testconnections.xml")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = cm.Target("MISSING")
+	if err == nil {
+		t.Errorf("No error when trying to find missing target from connection file.")
+	}
+}
+
 func TestParser(t *testing.T) {
-	target, err := NewTarget("GLIB", "c.xml")
+	cm, err := NewCM("testconnections.xml")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	target, err := cm.Target("GLIB")
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	expectedregs := make(map[string]bool)
 	expectedregs["id"] = true
 	expectedregs["id.magic"] = true
@@ -37,7 +65,7 @@ func TestParser(t *testing.T) {
 	}
 	for reg := range expectedregs {
 		if _, ok := target.Regs[reg]; !ok {
-			t.Error("Didn't fine expected register: ", reg)
+			t.Error("Didn't find expected register: ", reg)
 		}
 	}
 	if err != nil {
