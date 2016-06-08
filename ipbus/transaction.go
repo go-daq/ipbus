@@ -26,7 +26,7 @@ type transaction struct {
 }
 
 func newrequesttransaction(tid typeID, words uint8, addr uint32, input []uint32, resp chan Response, byteslice, final bool) transaction {
-	header := transactionheader{uint8(protocolversion), 0xffff, words, tid, Request}
+	header := transactionheader{uint8(protocolversion), 0x0, words, tid, Request}
 	trans := transaction{header, addr, input, resp, byteslice, final}
 	return trans
 }
@@ -224,11 +224,12 @@ func (p *packet) add(trans transaction) error {
 	}
 	p.request = append(p.request, transhead...)
 	fmt.Printf("Added transaction header (%x): p.request = %x\n", transhead, p.request)
-	data := make([]byte, 4*len(trans.Input))
+	data := make([]byte, 4*len(trans.Input) + 4)
 	fmt.Printf("data [%d, %d] = %v\n", len(data), cap(data), data)
+	p.header.order.PutUint32(data, trans.Addr)
 	for i, val := range trans.Input {
 		fmt.Printf("i = %d, val = %d = 0x%x\n", i, val, val)
-		buffer := data[i * 4:]
+		buffer := data[(i + 1) * 4:]
 		fmt.Printf("Putting 0x%x into %v\n", val, buffer)
 		fmt.Printf("1: header order = %v\n", p.header.order)
 		p.header.order.PutUint32(buffer, val)

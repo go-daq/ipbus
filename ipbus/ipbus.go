@@ -165,7 +165,8 @@ func (th transactionheader) encode(data []byte, order binary.ByteOrder) error {
 		data[0] = (uint8(th.version) << 4) | uint8((th.id&0x0f00)>>8)
 		data[1] = uint8(th.id & 0xff)
 		data[2] = th.words
-		data[1] = uint8(th.tid)<<4 | uint8(th.code)
+		fmt.Printf("Encoding transaction header: %v\n", th)
+		data[3] = uint8(th.tid)<<4 | uint8(th.code)
 	} else if order == binary.LittleEndian {
 		data[3] = (uint8(th.version) << 4) | uint8((th.id&0x0f00)>>8)
 		data[2] = uint8(th.id & 0xff)

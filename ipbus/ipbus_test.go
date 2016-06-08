@@ -46,6 +46,7 @@ func TestSingleReadWrite(t *testing.T) {
 	if !ok {
 		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
 	}
+	testreg.noninc = false
 	testval := uint32(0xdeadbeef)
 	t.Logf("Writing single vale 0x%x to test register.", testval)
 	t.Logf("testreg = %v\n", testreg)
