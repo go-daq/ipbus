@@ -20,8 +20,6 @@ package ipbus
 */
 import (
 	"bitbucket.org/NickRyder/goipbus/old/data"
-	//"bitbucket.org/NickRyder/goipbus/old/glibxml"
-	//oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
 	"fmt"
 	"net"
 	"time"
