@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"path/filepath"
 	"strings"
 )
@@ -54,14 +55,10 @@ func (cm CM) Target(name string) (Target, error) {
 	if dest == "" {
 		return Target{}, fmt.Errorf("Connection '%s' not found.", name)
 	}
-	regs := make(map[string]Register)
-	reqs := make(chan usrrequest)
-	fp := make(chan bool)
-	stop := make(chan bool)
-	t := Target{Name: name, Regs: regs, dest: dest, requests: reqs,
-		finishpacket: fp, stop: stop}
-	t.TimeoutPeriod = DefaultTimeout
-	t.AutoDispatch = DefaultAutoDispatch
-	err := t.parseregfile(addr, uint32(0))
+	conn, err := net.Dial("udp", "localhost:60001")
+	if err != nil {
+		panic(err)
+	}
+	t, err := New("dummy", addr, conn)
 	return t, err
 }
