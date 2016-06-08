@@ -480,57 +480,6 @@ func (h *hw) Send(p *packet) error {
 	return error(nil)
 }
 
-// Send a packet out
-/*
-func (h *hw) send(data chan *hwpacket, errs chan error) {
-	running := true
-	for running {
-		p, ok := <-data
-		if !ok {
-			running = false
-			continue
-		}
-		fmt.Printf("Sent a packet\n")
-		n, err := h.conn.Write(p.Data)
-		if err != nil {
-			errs <- fmt.Errorf("hw%d sent %d bytes of data: %v", h.Num, n, err)
-		}
-	}
-
-}
-*/
-
-
-/*
-func (h *hw) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {
-//	   if p.ID == 1 {
-//	       fmt.Printf("Sending packet with ID = 1: %v\n", p)
-//	   }
-	// Make ReqResp
-	rr := data.CreateReqResp(p)
-	// encode outgoing packet
-	if err := rr.EncodeOut(); err != nil {
-		return rr, err
-	}
-	// Send outgoing packet, timestamp ReqResp sent
-	//fmt.Printf("hw %d: Sending packet %v to %v: %x\n", h.Num, rr.Out, h.conn.RemoteAddr(), rr.Bytes[:rr.RespIndex])
-	n, err := h.conn.Write(rr.Bytes[:rr.RespIndex])
-	if err != nil {
-		return rr, err
-	}
-	if n != rr.RespIndex {
-		return rr, fmt.Errorf("Only sent %d of %d bytes.", n, rr.RespIndex)
-	}
-	rr.Sent = time.Now()
-	if p.Type == ipbus.Resend {
-        fmt.Printf("hw%d: Sent resend request at %v: 0x%x\n", h.Num, rr.Sent, rr.Bytes[:rr.RespIndex])
-	}
-	if h.nverbose > 0 {
-		fmt.Printf("hw%d: sent packet with ID = %d = 0x%x\n", h.Num, rr.Out.ID, rr.Out.ID)
-	}
-	return rr, error(nil)
-}
-*/
 
 // Receive incoming packets
 func (h *hw) receive() {
