@@ -41,6 +41,7 @@ func New(name, fn string, conn net.Conn) (Target, error) {
 		t.TimeoutPeriod = DefaultTimeout
 		t.AutoDispatch = DefaultAutoDispatch
 		t.hw = newhw(conn, t.TimeoutPeriod)
+		go t.hw.Run()
 		err := t.parseregfile(fn, uint32(0))
 	return t, err
 }

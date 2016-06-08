@@ -28,7 +28,7 @@ func TestSingleReadWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("cm.Devices: %v", cm.Devices)
+	//t.Logf("cm.Devices: %v", cm.Devices)
 	target, err := cm.Target("dummy.udp2")
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,6 @@ func TestSingleReadWrite(t *testing.T) {
 	testval := uint32(0xdeadbeef)
 	t.Logf("Writing single vale 0x%x to test register.", testval)
 	t.Logf("testreg = %v\n", testreg)
-	/*
 		respchan := target.Write(testreg, []uint32{testval})
 		target.Dispatch()
 		resp := <-respchan
@@ -59,7 +58,6 @@ func TestSingleReadWrite(t *testing.T) {
 		if value != testval {
 			t.Fatalf("Read value 0x%x, expected 0x%x", value, testval)
 		}
-	*/
 
 	/*
 		if failunwritten {

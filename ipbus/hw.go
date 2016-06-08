@@ -179,6 +179,7 @@ func (h *hw) handlelost() {
 
 // Get the device's status to set MTU and next ID.
 func (h *hw) ConfigDevice() {
+	fmt.Printf("hw.ConfigDevice()\n")
 	err := h.sendstatusrequest()
 	if err != nil {
 		panic(err)
