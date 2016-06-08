@@ -19,7 +19,6 @@ package ipbus
        * Parse packet and transaction headers from received byte stream
 */
 import (
-	"bitbucket.org/NickRyder/goipbus/old/data"
 	"fmt"
 	"net"
 	"time"
@@ -27,12 +26,12 @@ import (
 
 var nhw = 0
 
-func newhw(num int, ipaddr string, dt time.Duration, errs chan data.ErrPack) *hw {
+func newhw(num int, ipaddr string, dt time.Duration) *hw {
 	raddr, err := net.ResolveUDPAddr("udp", ipaddr)
 	if err != nil {
 		panic(err)
 	}
-	hw := hw{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), errs: errs,
+	hw := hw{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1),
 		inflight: 0, maxflight: 4, reporttime: 30 * time.Second}
 	hw.init()
 	fmt.Printf("Created new hw: %v\n", hw)
@@ -42,7 +41,7 @@ func newhw(num int, ipaddr string, dt time.Duration, errs chan data.ErrPack) *hw
 type hw struct {
 	Num        int
 	replies    chan hwpacket
-	errs       chan data.ErrPack // Channel to send errors to whomever cares.
+	//errs       chan data.ErrPack // Channel to send errors to whomever cares.
 	conn       *net.UDPConn      // UDP connection with the device.
 	raddr      *net.UDPAddr      // UDP address of the hardware device.
 	configured bool              // Flag to ensure connection is configured, etc. before
@@ -120,7 +119,6 @@ func (h *hw) updatetimeout() {
 }
 
 func (h *hw) handlelost() {
-	defer h.clean()
 	h.timedout.Stop()
 	h.handlinglost = true
 	fmt.Printf("Trying to handle a lost packet with id = %d = 0x%x.\n", h.timeoutid, h.timeoutid)
@@ -180,7 +178,6 @@ func (h *hw) handlelost() {
 
 // Get the device's status to set MTU and next ID.
 func (h *hw) ConfigDevice() {
-	defer h.clean()
 	err := h.sendstatusrequest()
 	if err != nil {
 		panic(err)
@@ -283,18 +280,6 @@ func (h *hw) returnreply() {
 	}
 }
 
-func (h *hw) clean() {
-	if r := recover(); r != nil {
-		if err, ok := r.(error); ok {
-			fmt.Printf("hw%d caught panic: %v.\n", h.Num, err)
-			h.stopped = true
-			h.closeall()
-			ep := data.MakeErrPack(err)
-			h.errs <- ep
-		}
-	}
-}
-
 func (h *hw) closeall() {
 	// This should be updated to close the channels for each transaction that would close its channel after sending.
 	/*
@@ -312,7 +297,6 @@ func (h *hw) closeall() {
 
 // NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
 func (h *hw) Run() {
-	defer h.clean()
 	if err := h.config(); err != nil {
 		panic(err)
 	}
@@ -483,7 +467,6 @@ func (h *hw) Send(p *packet) error {
 
 // Receive incoming packets
 func (h *hw) receive() {
-	defer h.clean()
 	running := true
 	for running {
 		p := emptyPacket()
