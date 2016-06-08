@@ -26,13 +26,12 @@ import (
 
 var nhw = 0
 
-func newhw(num int, ipaddr string, dt time.Duration) *hw {
-	raddr, err := net.ResolveUDPAddr("udp", ipaddr)
-	if err != nil {
-		panic(err)
-	}
-	hw := hw{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1),
-		inflight: 0, maxflight: 4, reporttime: 30 * time.Second}
+func newhw(conn net.Conn, dt time.Duration) *hw {
+	raddr := conn.RemoteAddr()
+	hw := hw{Num: nhw, conn: conn, raddr: raddr, waittime: dt, 
+		nextID: uint16(1), inflight: 0, maxflight: 4, 
+		reporttime: 30 * time.Second}
+	nhw += 1
 	hw.init()
 	fmt.Printf("Created new hw: %v\n", hw)
 	return &hw
@@ -42,8 +41,8 @@ type hw struct {
 	Num        int
 	replies    chan hwpacket
 	//errs       chan data.ErrPack // Channel to send errors to whomever cares.
-	conn       *net.UDPConn      // UDP connection with the device.
-	raddr      *net.UDPAddr      // UDP address of the hardware device.
+	conn       net.Conn      // UDP connection with the device.
+	raddr      net.Addr      // UDP address of the hardware device.
 	configured bool              // Flag to ensure connection is configured, etc. before
 	// attempting to send data.
 	// is assumed to be lost and handled as such.
@@ -98,6 +97,7 @@ func (h hw) String() string {
 }
 
 // Connect to hw's UDP socket.
+/*
 func (h *hw) config() error {
 	err := error(nil)
 	if h.conn, err = net.DialUDP("udp", nil, h.raddr); err != nil {
@@ -105,6 +105,7 @@ func (h *hw) config() error {
 	}
 	return error(nil)
 }
+*/
 
 func (h *hw) updatetimeout() {
 	if h.inflight > 0 {
@@ -297,9 +298,11 @@ func (h *hw) closeall() {
 
 // NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
 func (h *hw) Run() {
+	/*
 	if err := h.config(); err != nil {
 		panic(err)
 	}
+	*/
 	go h.ConfigDevice()
 	running := true
 	go h.receive()
@@ -470,7 +473,7 @@ func (h *hw) receive() {
 	running := true
 	for running {
 		p := emptyPacket()
-		n, addr, err := h.conn.ReadFrom(p.Data)
+		n, err := h.conn.Read(p.Data)
 		h.bytesreceived += float64(n)
 		h.packsreceived += 1.0
 		if err != nil {
@@ -481,7 +484,7 @@ func (h *hw) receive() {
 				fmt.Printf("Received a packet of %d bytes: 0x%x.\n", n, p.Data[:n])
 			}
 			p.Data = p.Data[:n]
-			p.RAddr = addr
+			p.RAddr = h.raddr
 			h.replies <- p
 		}
 	}

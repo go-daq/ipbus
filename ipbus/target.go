@@ -1,7 +1,6 @@
 package ipbus
 
 import (
-	"fmt"
 	"net"
 	"time"
 )
@@ -29,12 +28,11 @@ type Target struct {
 	nextoutid, nextinid uint32
 	requests            chan usrrequest
 	finishpacket, stop  chan bool
-	hw                  hw
+	hw                  *hw
 }
 
 // Create a new target by parsing an XML file description.
-func New(fn string, conn *net.Conn) (Target, error) {
-	/*
+func New(name, fn string, conn net.Conn) (Target, error) {
 		regs := make(map[string]Register)
 		reqs := make(chan usrrequest)
 		fp := make(chan bool)
@@ -42,17 +40,9 @@ func New(fn string, conn *net.Conn) (Target, error) {
 		t := Target{Name: name, Regs: regs, requests: reqs, finishpacket: fp, stop: stop}
 		t.TimeoutPeriod = DefaultTimeout
 		t.AutoDispatch = DefaultAutoDispatch
-		err := t.parse(fn)
-	*/
-	/*
-		cm, err := NewCM(fn)
-		if err != nil {
-			return Target{}, err
-		}
-		t, err := cm.Target(name)
-		return t, err
-	*/
-	return Target{}, fmt.Errorf("Function not written.")
+		t.hw = newhw(conn, t.TimeoutPeriod)
+		err := t.parseregfile(fn, uint32(0))
+	return t, err
 }
 
 /*
