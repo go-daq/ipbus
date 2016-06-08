@@ -251,6 +251,28 @@ func (h *hw) sendpack(pack *packet) error {
 	return error(nil)
 }
 
+func (h *hw) sendstatusrequest() error {
+	data := newStatusPacket()
+	n, err := h.conn.Write(data)
+	h.bytessent += float64(n)
+	h.packssent += 1.0
+	if err != nil {
+		return fmt.Errorf("hw%d failed after sending %d bytes of status request: %v", h.Num, n, err)
+	}
+	return error(nil)
+}
+
+func (h *hw) sendresendrequest(id uint16) error {
+	data := newResendPacket(id)
+	n, err := h.conn.Write(data)
+	h.bytessent += float64(n)
+	h.packssent += 1.0
+	if err != nil {
+		return fmt.Errorf("hw%d failed after sending %d bytes of resend request: %v", h.Num, n, err)
+	}
+	return error(nil)
+}
+
 func (h *hw) returnreply() {
 	sentrep := true
 	for sentrep {
@@ -477,6 +499,7 @@ func (h *hw) Send(p *packet) error {
 }
 
 // Send a packet out
+/*
 func (h *hw) send(data chan *hwpacket, errs chan error) {
 	running := true
 	for running {
@@ -488,11 +511,13 @@ func (h *hw) send(data chan *hwpacket, errs chan error) {
 		fmt.Printf("Sent a packet\n")
 		n, err := h.conn.Write(p.Data)
 		if err != nil {
-			errs <- fmt.Errorf("hw%d sent %d byte of data: %v\n", h.Num, n, err)
+			errs <- fmt.Errorf("hw%d sent %d bytes of data: %v", h.Num, n, err)
 		}
 	}
 
 }
+*/
+
 
 /*
 func (h *hw) send(p ipbus.Packet, verbose bool) (data.ReqResp, error) {

@@ -5,6 +5,31 @@ import (
 	"net"
 )
 
+func newResendPacket(id uint16) []byte {
+	data := make([]byte, 4)
+	data[0] = uint8(protocolversion) << 4
+	data[1] = uint8(id >> 8)
+	data[2] = uint8(id & 0x00ff)
+	boq := uint8(0xf0)
+	data[3] = boq & uint8(resend)
+	return data
+}
+
+func newStatusPacket() []byte {
+	data := make([]byte, 60)
+	data[0] = uint8(protocolversion) << 4
+	boq := uint8(0xf0)
+	data[3] = boq & uint8(status)
+	return data
+}
+
+type statuspacket struct {
+	mtu uint32
+	nbuffers uint32
+	nextid uint32
+}
+
+
 type hwpacket struct {
 	Data   []byte
 	RAddr  net.Addr
