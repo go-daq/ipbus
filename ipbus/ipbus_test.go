@@ -17,6 +17,7 @@ func TestTimeout(t *testing.T) {
 
 // Test single word read and write.
 func TestSingleReadWrite(t *testing.T) {
+	/*
 	dummy := newdummy(50002)
 	if err := dummy.Start(); err != nil {
 		t.Error(err)
@@ -25,6 +26,7 @@ func TestSingleReadWrite(t *testing.T) {
 	if err := dummy.Stop(); err != nil {
 		t.Error(err)
 	}
+	*/
 	if failunwritten {
 		t.Errorf("Test function not yet implemented.")
 	}
@@ -40,7 +42,7 @@ func TestBlockReadWrite(t *testing.T) {
 
 // Test that the library returns correct errors when going against target's permissions.
 func TestPermissions(t *testing.T) {
-	cm, err := NewCM("dummy_connections.xml")
+	cm, err := NewCM("xml/dummy_connections.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

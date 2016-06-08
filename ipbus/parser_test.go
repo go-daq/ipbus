@@ -12,7 +12,7 @@ func TestParserMissingFile(t *testing.T) {
 }
 
 func TestParserMissingTarget(t *testing.T) {
-	cm, err := NewCM("testconnections.xml")
+	cm, err := NewCM("xml/testconnections.xml")
 	if err != nil {
 		t.Error(err)
 		return
@@ -24,7 +24,7 @@ func TestParserMissingTarget(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
-	cm, err := NewCM("testconnections.xml")
+	cm, err := NewCM("xml/testconnections.xml")
 	if err != nil {
 		t.Fatal(err)
 		return
