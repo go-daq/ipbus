@@ -2,6 +2,7 @@ package ipbus
 
 import (
 	//"math/rand"
+	"net"
 	"testing"
 )
 
@@ -24,12 +25,18 @@ func TestSingleReadWrite(t *testing.T) {
 	}
 	t.Logf("Started dummy hardware.")
 	defer dummy.Stop()
+	/*
 	cm, err := NewCM("xml/dummy_connections.xml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	//t.Logf("cm.Devices: %v", cm.Devices)
-	target, err := cm.Target("dummy.udp2")
+	*/
+	conn, err := net.Dial("udp4", "localhost:60001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := New("dummy", "xml/dummy_address.xml", conn)
 	if err != nil {
 		t.Fatal(err)
 	}

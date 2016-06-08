@@ -32,6 +32,7 @@ func newhw(conn net.Conn, dt time.Duration) *hw {
 		nextID: uint16(1), inflight: 0, maxflight: 4, 
 		reporttime: 30 * time.Second}
 	nhw += 1
+	hw.nverbose = 5
 	hw.init()
 	fmt.Printf("Created new hw: %v\n", hw)
 	return &hw
@@ -230,6 +231,9 @@ func (h *hw) sendpack(pack *packet) error {
 		fmt.Printf("Sending request: %v, 0x%x\n", pack, data)
 	}
 	n, err := h.conn.Write(data)
+	if h.nverbose > 0 {
+		fmt.Printf("Status request sent: n, err = %d, %v\n", n, err)
+	}
 	h.bytessent += float64(n)
 	h.packssent += 1.0
 	if err != nil {
@@ -240,6 +244,9 @@ func (h *hw) sendpack(pack *packet) error {
 
 func (h *hw) sendstatusrequest() error {
 	data := newStatusPacket()
+	if h.nverbose > 0 {
+		fmt.Printf("HW%d sending status request: %x\n", h.Num, data)
+	}
 	n, err := h.conn.Write(data)
 	h.bytessent += float64(n)
 	h.packssent += 1.0
@@ -479,7 +486,7 @@ func (h *hw) receive() {
 		h.packsreceived += 1.0
 		if err != nil {
 			running = false
-			fmt.Printf("hw%d not receiving as connection closed.\n", h.Num)
+			fmt.Printf("hw%d not receiving as connection closed: %v\n", h.Num, err)
 		} else {
 			if h.nverbose > 0 {
 				fmt.Printf("Received a packet of %d bytes: 0x%x.\n", n, p.Data[:n])
