@@ -20,7 +20,7 @@ package ipbus
 */
 import (
 	"bitbucket.org/NickRyder/goipbus/old/data"
-	"bitbucket.org/NickRyder/goipbus/old/glibxml"
+	//"bitbucket.org/NickRyder/goipbus/old/glibxml"
 	oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
 	"fmt"
 	"net"
@@ -29,13 +29,13 @@ import (
 
 var nhw = 0
 
-func newhw(num int, mod glibxml.Module, dt time.Duration, errs chan data.ErrPack) *hw {
-	raddr, err := net.ResolveUDPAddr("udp", mod.IP)
+func newhw(num int, ipaddr string, dt time.Duration, errs chan data.ErrPack) *hw {
+	raddr, err := net.ResolveUDPAddr("udp", ipaddr)
 	if err != nil {
 		panic(err)
 	}
 	hw := hw{Num: num, raddr: raddr, waittime: dt, nextID: uint16(1), errs: errs,
-		Module: mod, inflight: 0, maxflight: 4, reporttime: 30 * time.Second}
+		inflight: 0, maxflight: 4, reporttime: 30 * time.Second}
 	hw.init()
 	fmt.Printf("Created new hw: %v\n", hw)
 	return &hw
@@ -56,7 +56,6 @@ type hw struct {
 	// sent. It is the hw interface's responsibility to
 	// ensure that sent requests and their replies will not
 	// overrun this bound. This is not currently implemented.
-	Module glibxml.Module // Addresses of registers, ports, etc.
 	// New stuff for multiple packets in flight:
 	inflight, maxflight         int
 	tosend, flying, replied     map[uint16]*packet
