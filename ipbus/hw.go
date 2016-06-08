@@ -59,7 +59,7 @@ type hw struct {
 	tosend, flying, replied     map[uint16]*packet
 	queuedids, flyingids        idlog
 	timedout                    *time.Ticker
-	incoming                    chan packet
+	incoming                    chan *packet
 	waittime                    time.Duration
 	nverbose                    int
 	bytessent, bytesreceived    float64
@@ -83,7 +83,7 @@ func (h *hw) init() {
 	h.queuedids = newIDLog(256)
 	h.flyingids = newIDLog(32)
 	h.timedout = time.NewTicker(10000 * time.Second)
-	h.incoming = make(chan packet, 100)
+	h.incoming = make(chan *packet, 100)
 	h.returnedsize = 32
 	h.returnedindex = 31
 	h.returnedids = make([]uint16, h.returnedsize)
@@ -369,7 +369,7 @@ func (h *hw) Run() {
 
 			//h.tosend[req.reqresp.Out.ID] = req
 			//err := h.queuedids.add(req.reqresp.Out.ID)
-			h.tosend[pack.id] = &pack
+			h.tosend[pack.id] = pack
 			err := h.queuedids.add(pack.id)
 			if err != nil {
 				panic(err)
@@ -468,7 +468,7 @@ func (h *hw) nextid() uint16 {
 	return id
 }
 
-func (h *hw) Send(p packet) error {
+func (h *hw) Send(p *packet) error {
 	if h.stopped {
 		fmt.Printf("Not sending a packet because hw%d is stopped.\n", h.Num)
 		return fmt.Errorf("hw%d is stopped.", h.Num)

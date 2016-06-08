@@ -151,7 +151,7 @@ func (p packet) send() {
 	}
 }
 
-func emptypacket(pt packetType) packet {
+func emptypacket(pt packetType) *packet {
 	trans := make([]transaction, 0, 8)
 	replies := make([]Response, 0, 8)
 	//request := bytes.NewBuffer(make([]byte, 0, 1472))
@@ -168,7 +168,7 @@ func emptypacket(pt packetType) packet {
 	size := (MaxPacketSize - 28) / 4
 	header := packetheader{uint8(protocolversion), uint16(0),
 			  pt, defaultorder}
-	return packet{header, 0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
+	return &packet{header, 0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
 }
 
 func (p *packet) add(trans transaction) error {

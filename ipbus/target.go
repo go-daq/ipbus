@@ -62,19 +62,20 @@ func (t *Target) AllowAutoDispatch(enable bool) {
 */
 
 func (t Target) preparepackets() {
-	packs := make([]packet, 0, 8)
+	packs := make([]*packet, 0, 8)
 	running := true
 	for running {
 		select {
 		case req := <-t.requests:
 			if req.dispatch {
 				// Dispatch any queued full or partial packets
+				fmt.Printf("Dispatch request. %d packets ready.\n", len(packs))
 				for _, p := range packs {
 					fmt.Printf("packet into h.incoming: %v\n", p)
 					t.hw.incoming <-p
 					//t.send(p)
 				}
-				packs = []packet{}
+				packs = []*packet{}
 			} else {
 				// Add a new request to an existing or new packet
 				fmt.Printf("preparepackets() packs = %v\n", packs)
@@ -174,7 +175,7 @@ func (t Target) Dispatch() {
 
 }
 
-func (t *Target) send(p packet) {
+func (t *Target) send(p *packet) {
 	fmt.Printf("Packet going to hw.Send: %v\n", p)
 	t.hw.Send(p)
 }
