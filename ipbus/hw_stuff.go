@@ -1,8 +1,6 @@
 package ipbus
 
 import (
-	"bitbucket.org/NickRyder/goipbus/old/data"
-	oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
 	"fmt"
 	"net"
 )
@@ -20,16 +18,6 @@ func emptyPacket() hwpacket {
 
 func newPacket(data []byte) hwpacket {
 	return hwpacket{Data: data}
-}
-
-type hwrequest struct {
-	request oldipbus.Packet
-	reqresp data.ReqResp
-	dest    chan data.ReqResp
-}
-
-func (r hwrequest) String() string {
-	return fmt.Sprintf("reqresp: index = %d, size = %d [%x]", r.reqresp.RespIndex, r.reqresp.RespSize, r.reqresp.Bytes)
 }
 
 func newTracker(size int) tracker {
