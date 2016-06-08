@@ -40,7 +40,8 @@ type targetstatus struct {
 func parseStatus(data []byte) (targetstatus, error) {
 	mtu := byte2uint32(data[4:8], binary.BigEndian)
 	nresponsebuffer := byte2uint32(data[8:12], binary.BigEndian)
-	nextid := uint16(byte2uint32(data[12:16], binary.BigEndian))
+	nextheader := byte2uint32(data[12:16], binary.BigEndian)
+	nextid := uint16((nextheader & 0x00ffff00) >> 8)
 	received := make([]packetheader, 0, 4)
 	for i := 0; i < 4; i++ {
 		index := 32 + 4 * i
