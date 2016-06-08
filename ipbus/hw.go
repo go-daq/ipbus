@@ -50,6 +50,7 @@ type hw struct {
 	configured bool              // Flag to ensure connection is configured, etc. before
 	// attempting to send data.
 	// is assumed to be lost and handled as such.
+	statuses	chan targetstatus
 	nextID, timeoutid uint16 // The packet ID expected next by the hardware.
 	mtu               uint32 // The Maxmimum transmission unit is not currently used,
 	// but defines the largest packet size (in bytes) to be
@@ -77,6 +78,7 @@ type hw struct {
 }
 
 func (h *hw) init() {
+	h.statuses = make(chan targetstatus, 10)
 	h.replies = make(chan hwpacket, 100)
 	h.tosend = make(map[uint16]*packet)
 	h.flying = make(map[uint16]*packet)
@@ -190,16 +192,13 @@ func (h *hw) handlelost() {
 // Get the device's status to set MTU and next ID.
 func (h *hw) ConfigDevice() {
 	defer h.clean()
-	//status := oldipbus.StatusPacket()
-	rc := make(chan data.ReqResp)
-	//h.Send(status, rc)
-	rr := <-rc
-	statusreply := &oldipbus.StatusResp{}
-	if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
+	err := h.sendstatusrequest()
+	if err != nil {
 		panic(err)
 	}
-	h.mtu = statusreply.MTU
-	h.nextID = uint16(statusreply.Next)
+	statusreply := <-h.statuses
+	h.mtu = statusreply.mtu
+	h.nextID = uint16(statusreply.nextid)
 	fmt.Printf("Configured device: MTU = %d, next ID = %d\n", h.mtu, h.nextID)
 	h.configured = true
 }
@@ -407,20 +406,14 @@ func (h *hw) Run() {
 				fmt.Printf("Received packet with ID = %d = 0x%x\n", id, id)
 				h.nverbose -= 1
 			}
-			if id == 0 {
-				// Need to parse reply packet
-				/*
-					if req, ok := h.flying[id]; ok {
-						delete(h.flying, id)
-						req.reqresp.Bytes = append(req.reqresp.Bytes, rep.Data...)
-						req.reqresp.RAddr = rep.RAddr
-						req.reqresp.Received = time.Now()
-						if err := req.reqresp.Decode(); err != nil {
-							panic(err)
-						}
-						req.dest <- req.reqresp
-					}
-				*/
+			if id == 0 { // id == 0 should be status packet
+				st, err := parseStatus(rep.Data)
+				if err != nil {
+					// Handle error
+				}
+				// Status packets are used either for initial configuration 
+				// or for deciding what to do with a lost packet
+				h.statuses <-st
 			} else {
 				req, ok := h.flying[id]
 				if ok {

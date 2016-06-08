@@ -1,6 +1,7 @@
 package ipbus
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 )
@@ -23,17 +24,23 @@ func newStatusPacket() []byte {
 	return data
 }
 
-type statuspacket struct {
-	mtu uint32
-	nbuffers uint32
-	nextid uint32
-}
-
-
 type hwpacket struct {
 	Data   []byte
 	RAddr  net.Addr
 	header packetheader
+}
+
+type targetstatus struct {
+	mtu uint32
+	nresponsebuffer uint32
+	nextid uint16
+}
+
+func parseStatus(data []byte) (targetstatus, error) {
+	mtu := byte2uint32(data[4:7], binary.BigEndian)
+	nresponsebuffer := byte2uint32(data[8:11], binary.BigEndian)
+	nextid := uint16(byte2uint32(data[12:15], binary.BigEndian))
+	return targetstatus{mtu, nresponsebuffer, nextid}, error(nil)
 }
 
 func emptyPacket() hwpacket {
