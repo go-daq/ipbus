@@ -29,6 +29,7 @@ func TestParser(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	t.Logf("Device list: %v\n", cm.Devices)
 	target, err := cm.Target("GLIB")
 	if err != nil {
 		t.Fatal(err)

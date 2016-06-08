@@ -15,12 +15,6 @@ type connectionset struct {
 	Conns []connection `xml:"connection"`
 }
 
-type connection struct {
-	Id      string `xml:"id,attr"`
-	URI     string `xml:"uri,attr"`
-	Address string `xml:"address_table,attr"`
-}
-
 type node struct {
 	Id          string `xml:"id,attr"`
 	Addr        string `xml:"address,attr"`

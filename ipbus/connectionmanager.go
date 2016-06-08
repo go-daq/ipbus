@@ -17,6 +17,9 @@ func NewCM(fn string) (CM, error) {
 	}
 	cm.fn = fn
 	xml.Unmarshal(data, &cm.connlist)
+	for _, conn := range cm.connlist.Conns {
+		cm.Devices = append(cm.Devices, conn.Id)
+	}
 	return cm, nil
 }
 
@@ -24,8 +27,15 @@ type connlist struct {
 	Conns []connection `xml:"connection"`
 }
 
+type connection struct {
+	Id      string `xml:"id,attr"`
+	URI     string `xml:"uri,attr"`
+	Address string `xml:"address_table,attr"`
+}
+
 // Connection Manager
 type CM struct {
+	Devices []string
 	connlist connlist
 	fn string
 }
