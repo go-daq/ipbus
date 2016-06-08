@@ -41,23 +41,21 @@ func parseStatus(data []byte) (targetstatus, error) {
 	mtu := byte2uint32(data[4:8], binary.BigEndian)
 	nresponsebuffer := byte2uint32(data[8:12], binary.BigEndian)
 	nextid := uint16(byte2uint32(data[12:16], binary.BigEndian))
-	received := make([]packetheader, 4)
+	received := make([]packetheader, 0, 4)
 	for i := 0; i < 4; i++ {
 		index := 32 + 4 * i
 		header, err := newPacketHeader(data[index:index + 4])
-		if err != nil {
-			panic(err)
+		if err == nil {
+			received = append(received, header)
 		}
-		received[i] = header
 	}
-	sent := make([]packetheader, 4)
+	sent := make([]packetheader, 0, 4)
 	for i := 0; i < 4; i++ {
 		index := 48 + 4 * i
 		header, err := newPacketHeader(data[index:index + 4])
-		if err != nil {
-			panic(err)
+		if err == nil {
+			sent = append(sent, header)
 		}
-		sent[i] = header
 	}
 	ts := targetstatus{mtu, nresponsebuffer, nextid, received, sent}
 	return ts, error(nil)

@@ -1,11 +1,12 @@
 package ipbus
 
 import (
+	"fmt"
 	"net"
 	"time"
 )
 
-const DefaultTimeout = time.Second
+const DefaultTimeout = 10000 * time.Second
 const DefaultAutoDispatch = false
 
 type Target struct {
@@ -41,6 +42,7 @@ func New(name, fn string, conn net.Conn) (Target, error) {
 		t.TimeoutPeriod = DefaultTimeout
 		t.AutoDispatch = DefaultAutoDispatch
 		t.hw = newhw(conn, t.TimeoutPeriod)
+		go t.preparepackets()
 		go t.hw.Run()
 		err := t.parseregfile(fn, uint32(0))
 	return t, err
@@ -68,13 +70,18 @@ func (t Target) preparepackets() {
 			if req.dispatch {
 				// Dispatch any queued full or partial packets
 				for _, p := range packs {
-					t.send(&p)
+					fmt.Printf("packet into h.incoming: %v\n", p)
+					t.hw.incoming <-p
+					//t.send(p)
 				}
 				packs = []packet{}
 			} else {
 				// Add a new request to an existing or new packet
+				fmt.Printf("preparepackets() packs = %v\n", packs)
 				if len(packs) == 0 {
+					fmt.Printf("Packet list empty, adding new empty control packet.\n")
 					packs = append(packs, emptypacket(control))
+
 				}
 				p := packs[len(packs)-1]
 				// Determine if the current pack has enough space to fit the next request.
@@ -167,12 +174,15 @@ func (t Target) Dispatch() {
 
 }
 
-func (t *Target) send(p *packet) {
+func (t *Target) send(p packet) {
+	fmt.Printf("Packet going to hw.Send: %v\n", p)
 	t.hw.Send(p)
 }
 
 func (t *Target) enqueue(r usrrequest) {
+	fmt.Printf("Sending request into t.requests (%v, %d / %d)\n", t.requests, len(t.requests), cap(t.requests))
 	t.requests <- r
+	fmt.Printf("Request in channel.\n")
 }
 
 // Read nword words from register reg.
@@ -195,6 +205,7 @@ func (t Target) Write(reg Register, data []uint32) chan Response {
 		tid = writenoninc
 	}
 	r := usrrequest{tid, uint(len(data)), reg.Addr, data, resp, false, false}
+	fmt.Printf("Writing user request: %v\n", r)
 	t.enqueue(r)
 	return resp
 }

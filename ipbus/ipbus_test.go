@@ -18,6 +18,7 @@ func TestTimeout(t *testing.T) {
 
 // Test single word read and write.
 func TestSingleReadWrite(t *testing.T) {
+	/*
 	dummy := newdummy(60001)
 	t.Logf("Starting dummy hardware...")
 	if err := dummy.Start(); err != nil {
@@ -25,6 +26,7 @@ func TestSingleReadWrite(t *testing.T) {
 	}
 	t.Logf("Started dummy hardware.")
 	defer dummy.Stop()
+	*/
 	/*
 	cm, err := NewCM("xml/dummy_connections.xml")
 	if err != nil {
@@ -47,24 +49,24 @@ func TestSingleReadWrite(t *testing.T) {
 	testval := uint32(0xdeadbeef)
 	t.Logf("Writing single vale 0x%x to test register.", testval)
 	t.Logf("testreg = %v\n", testreg)
-		respchan := target.Write(testreg, []uint32{testval})
-		target.Dispatch()
-		resp := <-respchan
-		if resp.Err != nil {
-			t.Fatal(resp.Err)
-		}
+	respchan := target.Write(testreg, []uint32{testval})
+	target.Dispatch()
+	resp := <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
 
-		t.Logf("Reading single word from test register.")
-		respchan = target.Read(testreg, 1)
-		target.Dispatch()
-		resp = <-respchan
-		if resp.Err != nil {
-			t.Fatal(resp.Err)
-		}
-		value := resp.Data[0]
-		if value != testval {
-			t.Fatalf("Read value 0x%x, expected 0x%x", value, testval)
-		}
+	t.Logf("Reading single word from test register.")
+	respchan = target.Read(testreg, 1)
+	target.Dispatch()
+	resp = <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
+	value := resp.Data[0]
+	if value != testval {
+		t.Fatalf("Read value 0x%x, expected 0x%x", value, testval)
+	}
 
 	/*
 		if failunwritten {

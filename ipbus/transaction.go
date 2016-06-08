@@ -43,6 +43,10 @@ type packet struct {
 	sent    time.Time
 }
 
+func (p packet) String() string {
+	return fmt.Sprintf("packet id = %d, request = %x", p.id, p.request)
+}
+
 func (p packet) Bytes() []byte {
 	/*
 		b := p.request.Bytes()
@@ -162,7 +166,9 @@ func emptypacket(pt packetType) packet {
 	// Normal IP packet has up to 1500 bytes. IP header is 20 bytes, UDP
 	// header is 8 bytes. This leaves 368 words for the ipbus data.
 	size := (MaxPacketSize - 28) / 4
-	return packet{packetheader{}, 0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
+	header := packetheader{uint8(protocolversion), uint16(0),
+			  pt, defaultorder}
+	return packet{header, 0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
 }
 
 func (p *packet) add(trans transaction) error {
@@ -211,16 +217,25 @@ func (p *packet) add(trans transaction) error {
 
 	// Fill the outgoing packet
 	transhead := []byte{0, 0, 0, 0}
+	fmt.Printf("0: header order = %v\n", p.header.order)
 	err := trans.outheader.encode(transhead, p.header.order)
 	if err != nil {
 		fmt.Printf("Error encoding transaction header: %v\n", err)
 	}
 	p.request = append(p.request, transhead...)
+	fmt.Printf("Added transaction header (%x): p.request = %x\n", transhead, p.request)
 	data := make([]byte, 4*len(trans.Input))
+	fmt.Printf("data [%d, %d] = %v\n", len(data), cap(data), data)
 	for i, val := range trans.Input {
-		p.header.order.PutUint32(data[i*4:], val)
+		fmt.Printf("i = %d, val = %d = 0x%x\n", i, val, val)
+		buffer := data[i * 4:]
+		fmt.Printf("Putting 0x%x into %v\n", val, buffer)
+		fmt.Printf("1: header order = %v\n", p.header.order)
+		p.header.order.PutUint32(buffer, val)
 	}
+	fmt.Printf("data = %x\n", data)
 	p.request = append(p.request, data...)
+	fmt.Printf("Added data: p.request = %x\n", p.request)
 	p.transactions = append(p.transactions, trans)
 	return error(nil)
 }
@@ -231,7 +246,11 @@ func (p packet) space() (uint, uint) {
 
 func (p *packet) writeheader(id uint16) error {
 	p.header.pid = id
-	return p.header.encode(p.request)
+	p.id = id
+	fmt.Printf("Before writing header p.request = %x\n", p.request)
+	err := p.header.encode(p.request)
+	fmt.Printf("Wrote header with id = 0x%x: %x\n", id, p.request)
+	return err
 }
 
 type usrrequest struct {

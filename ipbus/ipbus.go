@@ -9,6 +9,7 @@ import (
 // Supported IPbus protocol version
 const IPbusVersion = 2.0
 const protocolversion = uint32(2)
+var defaultorder = binary.BigEndian
 
 // Maxiumum Ethernet packet size (bytes)
 var MaxPacketSize = uint(1500)
@@ -103,12 +104,14 @@ func (p packetheader) encode(data []byte) error {
 		data[0] = p.version << 4
 		data[1] = uint8((p.pid & 0xff00) >> 8)
 		data[2] = uint8(p.pid & 0x00ff)
-		data[3] = 0xf0 & uint8(p.ptype)
+		data[3] = 0xf0 | uint8(p.ptype)
+		fmt.Printf("Wrote BigEndian header: %x\n", data)
 	} else if p.order == binary.LittleEndian {
 		data[3] = p.version << 4
 		data[2] = uint8((p.pid & 0xff00) >> 8)
 		data[1] = uint8(p.pid & 0x00ff)
-		data[0] = 0xf0 & uint8(p.ptype)
+		data[0] = 0xf0 | uint8(p.ptype)
+		fmt.Printf("Wrote LittleEndian header: %x\n", data)
 	} else {
 		return fmt.Errorf("Cannot write invalid packet header to byte slice.")
 	}

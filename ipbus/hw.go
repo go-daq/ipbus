@@ -59,7 +59,7 @@ type hw struct {
 	tosend, flying, replied     map[uint16]*packet
 	queuedids, flyingids        idlog
 	timedout                    *time.Ticker
-	incoming                    chan *packet
+	incoming                    chan packet
 	waittime                    time.Duration
 	nverbose                    int
 	bytessent, bytesreceived    float64
@@ -83,7 +83,7 @@ func (h *hw) init() {
 	h.queuedids = newIDLog(256)
 	h.flyingids = newIDLog(32)
 	h.timedout = time.NewTicker(10000 * time.Second)
-	h.incoming = make(chan *packet, 100)
+	h.incoming = make(chan packet, 100)
 	h.returnedsize = 32
 	h.returnedindex = 31
 	h.returnedids = make([]uint16, h.returnedsize)
@@ -189,6 +189,7 @@ func (h *hw) ConfigDevice() {
 	h.mtu = statusreply.mtu
 	h.nextID = uint16(statusreply.nextid)
 	fmt.Printf("Configured device: MTU = %d, next ID = %d\n", h.mtu, h.nextID)
+	fmt.Printf("%d response buffers.\n", statusreply.nresponsebuffer)
 	h.configured = true
 }
 
@@ -226,11 +227,10 @@ func (h *hw) SetVerbose(n int) {
 func (h *hw) sendpack(pack *packet) error {
 	//fmt.Printf("Sending packet with ID = %d\n", req.reqresp.Out.ID)
 	h.sentout.add(pack.id)
-	data := pack.Bytes()
 	if h.nverbose > 0 {
-		fmt.Printf("Sending request: %v, 0x%x\n", pack, data)
+		fmt.Printf("Sending request: %v\n", pack)
 	}
-	n, err := h.conn.Write(data)
+	n, err := h.conn.Write(pack.request)
 	if h.nverbose > 0 {
 		fmt.Printf("Status request sent: n, err = %d, %v\n", n, err)
 	}
@@ -322,6 +322,7 @@ func (h *hw) Run() {
 			fmt.Printf("hw%d following request to stop.\n", h.Num)
 			running = false
 		case pack := <-h.incoming:
+			fmt.Printf("Packet read from h.incoming: %v\n", pack)
 			// Handle sending out packet
 			// Will move status and resend requests to another channel.
 			/*
@@ -353,6 +354,7 @@ func (h *hw) Run() {
 			*/
 			// To send out status and resend requests implement a port of the above elsewhere
 
+			fmt.Printf("Adding ID to packet. hw.nextID = %d\n", h.nextID)
 			pack.writeheader(h.nextid())
 			//pack.id = h.nextid()
 			//req.reqresp.Out.ID = h.nextid()
@@ -367,7 +369,7 @@ func (h *hw) Run() {
 
 			//h.tosend[req.reqresp.Out.ID] = req
 			//err := h.queuedids.add(req.reqresp.Out.ID)
-			h.tosend[pack.id] = pack
+			h.tosend[pack.id] = &pack
 			err := h.queuedids.add(pack.id)
 			if err != nil {
 				panic(err)
@@ -466,11 +468,12 @@ func (h *hw) nextid() uint16 {
 	return id
 }
 
-func (h *hw) Send(p *packet) error {
+func (h *hw) Send(p packet) error {
 	if h.stopped {
 		fmt.Printf("Not sending a packet because hw%d is stopped.\n", h.Num)
 		return fmt.Errorf("hw%d is stopped.", h.Num)
 	}
+	fmt.Printf("Packet going into h.incoming: %v\n", p)
 	h.incoming <- p
 	return error(nil)
 }
