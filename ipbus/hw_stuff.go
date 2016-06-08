@@ -2,9 +2,9 @@ package ipbus
 
 import (
 	"bitbucket.org/NickRyder/goipbus/old/data"
+	oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
 	"fmt"
 	"net"
-	oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
 )
 
 type hwpacket struct {

@@ -35,11 +35,10 @@ type connection struct {
 
 // Connection Manager
 type CM struct {
-	Devices []string
+	Devices  []string
 	connlist connlist
-	fn string
+	fn       string
 }
-
 
 func (cm CM) Target(name string) (Target, error) {
 	dir := filepath.Dir(cm.fn)
@@ -60,7 +59,7 @@ func (cm CM) Target(name string) (Target, error) {
 	fp := make(chan bool)
 	stop := make(chan bool)
 	t := Target{Name: name, Regs: regs, dest: dest, requests: reqs,
-				finishpacket: fp, stop: stop}
+		finishpacket: fp, stop: stop}
 	t.TimeoutPeriod = DefaultTimeout
 	t.AutoDispatch = DefaultAutoDispatch
 	err := t.parseregfile(addr, uint32(0))

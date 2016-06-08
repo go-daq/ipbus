@@ -35,22 +35,22 @@ type Target struct {
 // Create a new target by parsing an XML file description.
 func New(fn string, conn *net.Conn) (Target, error) {
 	/*
-	regs := make(map[string]Register)
-	reqs := make(chan usrrequest)
-	fp := make(chan bool)
-	stop := make(chan bool)
-	t := Target{Name: name, Regs: regs, requests: reqs, finishpacket: fp, stop: stop}
-	t.TimeoutPeriod = DefaultTimeout
-	t.AutoDispatch = DefaultAutoDispatch
-	err := t.parse(fn)
+		regs := make(map[string]Register)
+		reqs := make(chan usrrequest)
+		fp := make(chan bool)
+		stop := make(chan bool)
+		t := Target{Name: name, Regs: regs, requests: reqs, finishpacket: fp, stop: stop}
+		t.TimeoutPeriod = DefaultTimeout
+		t.AutoDispatch = DefaultAutoDispatch
+		err := t.parse(fn)
 	*/
 	/*
-	cm, err := NewCM(fn)
-	if err != nil {
-		return Target{}, err
-	}
-	t, err := cm.Target(name)
-	return t, err
+		cm, err := NewCM(fn)
+		if err != nil {
+			return Target{}, err
+		}
+		t, err := cm.Target(name)
+		return t, err
 	*/
 	return Target{}, fmt.Errorf("Function not written.")
 }
