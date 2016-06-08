@@ -21,7 +21,7 @@ package ipbus
 import (
 	"bitbucket.org/NickRyder/goipbus/old/data"
 	//"bitbucket.org/NickRyder/goipbus/old/glibxml"
-	oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
+	//oldipbus "bitbucket.org/NickRyder/goipbus/old/ipbus"
 	"fmt"
 	"net"
 	"time"
@@ -134,18 +134,18 @@ func (h *hw) handlelost() {
 	for id, req := range h.flying {
 		fmt.Printf("id = %d = 0x%x: %v\n", id, id, req)
 	}
-	//status := oldipbus.StatusPacket()
-	rc := make(chan data.ReqResp)
-	//h.Send(status, rc)
-	rr := <-rc
-	statusreply := &oldipbus.StatusResp{}
-	if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
-		panic(fmt.Errorf("Failed to parse status packet handling lost: %v", err))
+	// Get status
+	err := h.sendstatusrequest()
+	if err != nil {
+		panic(err)
 	}
+	statusreply := <-h.statuses
 	fmt.Printf("Found status: %v\n", statusreply)
 	fmt.Printf("Received headers:\n")
+	// Check if missing packet was either received or sent
 	packetreceived := false
 	packetsent := false
+	/*
 	for _, rh := range statusreply.ReceivedHeaders {
 		if rh.ID == h.timeoutid {
 			packetreceived = true
@@ -163,30 +163,21 @@ func (h *hw) handlelost() {
 			fmt.Printf("    %v\n", sh)
 		}
 	}
+	*/
 	if packetsent {
+		err := h.sendresendrequest(h.timeoutid)
 		fmt.Printf("Packet sent, need to send resend request.\n")
-		resendpack := oldipbus.ResendPacket(h.timeoutid)
-		//fake := make(chan data.ReqResp)
+		if err != nil {
+			panic(err)
+		}
 		h.nverbose = 5
-		fmt.Printf("Sending resend request: %v\n", resendpack)
-		//h.Send(resendpack, fake)
 		h.timedout = time.NewTicker(h.waittime)
 	} else if !packetreceived {
 		fmt.Printf("Packet not received, need to resend original packet (and any following ones).\n")
+		panic(fmt.Errorf("Not yet implemented resending lost outgoing packet."))
 	} else {
-		fmt.Printf("Packet received but not sent, not sure what to do...\n")
+		panic(fmt.Errorf("Packet received but not sent, not sure what to do...\n"))
 	}
-	fmt.Printf("sent out = %v\n", h.sentout)
-	fmt.Printf("received = %v\n", h.received)
-	fmt.Printf("returned = %v\n", h.returned)
-	time.Sleep(500 * time.Millisecond)
-	//h.Send(status, rc)
-	rr = <-rc
-	if err := statusreply.Parse(rr.Bytes[rr.RespIndex:]); err != nil {
-		panic(fmt.Errorf("Failed to parse status packet handling lost: %v", err))
-	}
-	fmt.Printf("Found status: %v\n", statusreply)
-	panic(fmt.Errorf("Just panic when a packet is lost."))
 }
 
 // Get the device's status to set MTU and next ID.

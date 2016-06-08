@@ -34,13 +34,33 @@ type targetstatus struct {
 	mtu uint32
 	nresponsebuffer uint32
 	nextid uint16
+	received, sent []packetheader
 }
 
 func parseStatus(data []byte) (targetstatus, error) {
-	mtu := byte2uint32(data[4:7], binary.BigEndian)
-	nresponsebuffer := byte2uint32(data[8:11], binary.BigEndian)
-	nextid := uint16(byte2uint32(data[12:15], binary.BigEndian))
-	return targetstatus{mtu, nresponsebuffer, nextid}, error(nil)
+	mtu := byte2uint32(data[4:8], binary.BigEndian)
+	nresponsebuffer := byte2uint32(data[8:12], binary.BigEndian)
+	nextid := uint16(byte2uint32(data[12:16], binary.BigEndian))
+	received := make([]packetheader, 4)
+	for i := 0; i < 4; i++ {
+		index := 32 + 4 * i
+		header, err := newPacketHeader(data[index:index + 4])
+		if err != nil {
+			panic(err)
+		}
+		received[i] = header
+	}
+	sent := make([]packetheader, 4)
+	for i := 0; i < 4; i++ {
+		index := 48 + 4 * i
+		header, err := newPacketHeader(data[index:index + 4])
+		if err != nil {
+			panic(err)
+		}
+		sent[i] = header
+	}
+	ts := targetstatus{mtu, nresponsebuffer, nextid, received, sent}
+	return ts, error(nil)
 }
 
 func emptyPacket() hwpacket {
