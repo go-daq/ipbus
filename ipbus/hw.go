@@ -322,7 +322,9 @@ func (h *hw) Run() {
 			fmt.Printf("hw%d following request to stop.\n", h.Num)
 			running = false
 		case pack := <-h.incoming:
-			fmt.Printf("Packet read from h.incoming: %v\n", pack)
+			if h.nverbose > 0 {
+				fmt.Printf("Packet read from h.incoming: %v\n", pack)
+			}
 			// Handle sending out packet
 			// Will move status and resend requests to another channel.
 			/*
@@ -354,7 +356,10 @@ func (h *hw) Run() {
 			*/
 			// To send out status and resend requests implement a port of the above elsewhere
 
-			fmt.Printf("Adding ID to packet. hw.nextID = %d\n", h.nextID)
+			if h.nverbose > 0 {
+				fmt.Printf("Adding ID to packet. hw.nextID = %d\n", h.nextID)
+
+			}
 			pack.writeheader(h.nextid())
 			//pack.id = h.nextid()
 			//req.reqresp.Out.ID = h.nextid()
@@ -473,7 +478,9 @@ func (h *hw) Send(p *packet) error {
 		fmt.Printf("Not sending a packet because hw%d is stopped.\n", h.Num)
 		return fmt.Errorf("hw%d is stopped.", h.Num)
 	}
-	fmt.Printf("Packet going into h.incoming: %v\n", p)
+	if h.nverbose > 0 {
+		fmt.Printf("Packet going into h.incoming: %v\n", p)
+	}
 	h.incoming <- p
 	return error(nil)
 }

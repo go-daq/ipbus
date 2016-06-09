@@ -79,11 +79,12 @@ func (p *packet) parse(data []byte) error {
 					switch {
 					case transheader.tid == read || transheader.tid == readnoninc:
 						if trans.byteslice {
-							resp.DataB = data[:transheader.words*4]
+							resp.DataB = data[:int(transheader.words)*4]
 						} else {
-							resp.Data = bytes2uint32s(data[:transheader.words*4], packheader.order)
+							resp.Data = bytes2uint32s(data[:int(transheader.words)*4], packheader.order)
 						}
-						data = data[transheader.words*4:]
+						fmt.Printf("Skipping %d words, %d bytes.\n", transheader.words, 4 * int(transheader.words))
+						data = data[int(transheader.words)*4:]
 					case transheader.tid == write || transheader.tid == writenoninc:
 						if trans.byteslice {
 							resp.DataB = []byte{}
@@ -99,6 +100,7 @@ func (p *packet) parse(data []byte) error {
 						data = data[4:]
 					}
 				} else { // info code is not success
+					fmt.Printf("Received a transaction info code: %v\n", transheader.code)
 					resp.Err = fmt.Errorf("IPbus error: %s", transactionerrs[transheader.code])
 					// What do I do if there was an error, stop parsing now?
 					// Does it continue with replies to following transactions?

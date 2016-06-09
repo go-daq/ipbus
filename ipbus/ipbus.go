@@ -10,6 +10,7 @@ import (
 const IPbusVersion = 2.0
 const protocolversion = uint32(2)
 var defaultorder = binary.BigEndian
+var verbose = false
 
 // Maxiumum Ethernet packet size (bytes)
 var MaxPacketSize = uint(1500)
@@ -136,6 +137,7 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 	if len(data) < 4 {
 		return fmt.Errorf("Transaction header must be four bytes.")
 	}
+	fmt.Printf("Parsing transaction header %x\n", data[:4])
 	if order == binary.BigEndian {
 		th.version = uint8(data[0] >> 4)
 		th.id = uint16(data[1])
@@ -143,6 +145,7 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 		th.words = uint8(data[2])
 		th.tid = typeID((data[3] & 0xf0) >> 4)
 		th.code = InfoCode(data[3] & 0x0f)
+		fmt.Printf("Header: %v\n", th)
 		return nil
 	} else if order == binary.LittleEndian {
 		th.version = uint8(data[3] >> 4)
@@ -151,6 +154,7 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 		th.words = uint8(data[1])
 		th.tid = typeID((data[0] & 0xf0) >> 4)
 		th.code = InfoCode(data[0] & 0x0f)
+		fmt.Printf("Header: %v\n", th)
 		return nil
 	} else {
 		return fmt.Errorf("Invalid byte order to decode transaction header.")

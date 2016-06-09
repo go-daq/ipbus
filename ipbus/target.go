@@ -43,6 +43,9 @@ func New(name, fn string, conn net.Conn) (Target, error) {
 		t.AutoDispatch = DefaultAutoDispatch
 		t.hw = newhw(conn, t.TimeoutPeriod)
 		go t.preparepackets()
+		if verbose {
+			t.hw.SetVerbose(1)
+		}
 		go t.hw.Run()
 		err := t.parseregfile(fn, uint32(0))
 	return t, err
