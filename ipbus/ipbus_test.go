@@ -11,27 +11,34 @@ import (
 	"time"
 )
 
-func TestMain(m *testing.M) {
-	ipbusverbose := flag.Bool("ipbusverbose", false, "Turn on verbosity of ipbus package")
-	flag.Parse()
-	verbose = *ipbusverbose
-	startdummy()
-	defer dummy.Stop()
-	starttarget()
-	if testing.Verbose() {
-		fmt.Printf("Target regs: %v\n", target.Regs)
-	}
-	code := m.Run()
-	dummy.Kill <-true
-	time.Sleep(time.Second)
-	os.Exit(code)
-}
-
 const failunwritten = false
 var dummy *DummyHardware
 var dt = 60 * time.Second
 var log *os.File
 var target *Target
+var nodummy *bool
+
+
+func TestMain(m *testing.M) {
+	ipbusverbose := flag.Bool("ipbusverbose", false, "Turn on verbosity of ipbus package")
+	nodummy = flag.Bool("nodummyhardware", false, "Skip tests requiring dummy hardware.")
+	flag.Parse()
+	verbose = *ipbusverbose
+	if !*nodummy {
+		startdummy()
+		defer dummy.Stop()
+	}
+	starttarget()
+	if testing.Verbose() {
+		fmt.Printf("Target regs: %v\n", target.Regs)
+	}
+	code := m.Run()
+	if !*nodummy {
+		dummy.Kill <-true
+	}
+	time.Sleep(time.Second)
+	os.Exit(code)
+}
 
 func startdummy() {
 	if dummy == nil {
@@ -83,6 +90,9 @@ func TestTimeout(t *testing.T) {
 
 // Test single word read and write.
 func TestSingleReadWrite(t *testing.T) {
+	if *nodummy {
+		t.Skip()
+	}
 	testreg, ok := target.Regs["REG"]
 	if !ok {
 		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
@@ -113,6 +123,9 @@ func TestSingleReadWrite(t *testing.T) {
 
 // Test block read and block write.
 func TestBlockReadWrite(t *testing.T) {
+	if *nodummy {
+		t.Skip()
+	}
 
 	testreg, ok := target.Regs["MEM"]
 	if !ok {
@@ -171,6 +184,9 @@ func TestBlockReadWrite(t *testing.T) {
 
 // Test that the library returns correct errors when going against target's permissions.
 func TestPermissions(t *testing.T) {
+	if *nodummy {
+		t.Skip()
+	}
 	/*
 	cm, err := NewCM("xml/dummy_connections.xml")
 	if err != nil {
@@ -217,6 +233,9 @@ func TestPermissions(t *testing.T) {
 
 // Bench mark single word read.
 func BenchmarkSingleRead(b *testing.B) {
+	if *nodummy {
+		b.Skip()
+	}
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -227,6 +246,9 @@ func BenchmarkSingleRead(b *testing.B) {
 
 // Bench mark single word write.
 func BenchmarkSingleWrite(b *testing.B) {
+	if *nodummy {
+		b.Skip()
+	}
 	/*
 		target := Target{}
 		reg := Register{}
@@ -252,6 +274,9 @@ func BenchmarkSingleWrite(b *testing.B) {
 
 // Bench mark multi-packet block reads.
 func BenchmarkBlockRead(b *testing.B) {
+	if *nodummy {
+		b.Skip()
+	}
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -262,6 +287,9 @@ func BenchmarkBlockRead(b *testing.B) {
 
 // Bench mark multi-packet block writes.
 func BenchmarkBlockWrite(b *testing.B) {
+	if *nodummy {
+		b.Skip()
+	}
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
