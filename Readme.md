@@ -4,7 +4,12 @@ goIPbus
 IPbus2.0 client library implemented in go.
 
 The IPbus protocol allows communication with an FPGA via TCP or UDP.
+The IPbus protocol was originally designed for data acquisition systems for the LHC experiments at CERN.
+Documentation on the IPbus library can be found at https://svnweb.cern.ch/trac/cactus/wiki/uhalQuickTutorial.
 The client library allows software to read and write values to IPbus registers in the FPGA target.
+
+The Go implementation was first developed as part of the read-out system of the 288 kg prototype SoLid anti-neutrino detector (http://arxiv.org/abs/1510.07835).
+The code was then split into a package for use in the full scale SoLid detector.
 
 Installation
 ------------
