@@ -83,7 +83,9 @@ func (p *packet) parse(data []byte) error {
 						} else {
 							resp.Data = bytes2uint32s(data[:int(transheader.words)*4], packheader.order)
 						}
-						fmt.Printf("Skipping %d words, %d bytes.\n", transheader.words, 4 * int(transheader.words))
+						if verbose {
+							fmt.Printf("Skipping %d words, %d bytes.\n", transheader.words, 4 * int(transheader.words))
+						}
 						data = data[int(transheader.words)*4:]
 					case transheader.tid == write || transheader.tid == writenoninc:
 						if trans.byteslice {
@@ -170,7 +172,7 @@ func emptypacket(pt packetType) *packet {
 	size := (MaxPacketSize - 28) / 4
 	header := packetheader{uint8(protocolversion), uint16(0),
 			  pt, defaultorder}
-	return &packet{header, 0, trans, replies, size, size, 0, 0, request, time.Time{}} // For normal packet
+	return &packet{header, 0, trans, replies, size, size, 1, 1, request, time.Time{}} // For normal packet
 }
 
 func (p *packet) add(trans transaction) error {
@@ -187,15 +189,15 @@ func (p *packet) add(trans transaction) error {
 			return fmt.Errorf("Add %d word Read[NonInc]: insufficient space in packet.", trans.outheader.words)
 		}
 		p.reqlen += 2
-		p.resplen += uint(trans.outheader.words + 1)
+		p.resplen += uint(trans.outheader.words) + 1
 	case trans.outheader.tid == write || trans.outheader.tid == writenoninc:
 		if len(trans.Input) != int(trans.outheader.words) {
 			return fmt.Errorf("Write/WriteNonInc transaction with NWords = %d, but %d words of input data", trans.outheader.words, len(trans.Input))
 		}
-		if reqspace < uint(2+trans.outheader.words) || respspace < 1 {
+		if reqspace < uint(trans.outheader.words) + 2 || respspace < 1 {
 			return fmt.Errorf("Add %d word Write[NonInc]: insufficient space in packet.", trans.outheader.words)
 		}
-		p.reqlen += uint(2 + trans.outheader.words)
+		p.reqlen += uint(trans.outheader.words) + 2
 		p.resplen += 1
 	case trans.outheader.tid == rmwbits:
 		if len(trans.Input) != 2 {
@@ -220,39 +222,45 @@ func (p *packet) add(trans transaction) error {
 	// Fill the outgoing packet
 	transhead := []byte{0, 0, 0, 0}
 	//fmt.Printf("0: header order = %v\n", p.header.order)
+	trans.outheader.id = uint16(len(p.transactions))
 	err := trans.outheader.encode(transhead, p.header.order)
 	if err != nil {
 		fmt.Printf("Error encoding transaction header: %v\n", err)
 	}
 	p.request = append(p.request, transhead...)
-	fmt.Printf("Added transaction header (%x): p.request = %x\n", transhead, p.request)
+	if verbose {
+		fmt.Printf("Added transaction header (%x): p.request = %x\n", transhead, p.request)
+	}
 	data := make([]byte, 4*len(trans.Input) + 4)
-	fmt.Printf("data [%d, %d] = %v\n", len(data), cap(data), data)
+	if verbose {
+		fmt.Printf("data [%d, %d] = %v\n", len(data), cap(data), data)
+	}
 	p.header.order.PutUint32(data, trans.Addr)
 	for i, val := range trans.Input {
-		fmt.Printf("i = %d, val = %d = 0x%x\n", i, val, val)
 		buffer := data[(i + 1) * 4:]
 		//fmt.Printf("Putting 0x%x into %v\n", val, buffer)
 		//fmt.Printf("1: header order = %v\n", p.header.order)
 		p.header.order.PutUint32(buffer, val)
 	}
-	fmt.Printf("data = %x\n", data)
+	if verbose {
+		fmt.Printf("data = %x\n", data)
+	}
 	p.request = append(p.request, data...)
-	fmt.Printf("Added data: p.request = %x\n", p.request)
+	if verbose {
+		fmt.Printf("Added data: p.request = %x\n", p.request)
+	}
 	p.transactions = append(p.transactions, trans)
 	return error(nil)
 }
 
 func (p packet) space() (uint, uint) {
-	return p.reqcap - p.reqlen, p.respcap - p.reqlen
+	return p.reqcap - p.reqlen, p.respcap - p.resplen
 }
 
 func (p *packet) writeheader(id uint16) error {
 	p.header.pid = id
 	p.id = id
-	fmt.Printf("Before writing header p.request = %x\n", p.request)
 	err := p.header.encode(p.request)
-	fmt.Printf("Wrote header with id = 0x%x: %x\n", id, p.request)
 	return err
 }
 

@@ -107,13 +107,11 @@ func (p packetheader) encode(data []byte) error {
 		data[1] = uint8((p.pid & 0xff00) >> 8)
 		data[2] = uint8(p.pid & 0x00ff)
 		data[3] = 0xf0 | uint8(p.ptype)
-		fmt.Printf("Wrote BigEndian header: %x\n", data)
 	} else if p.order == binary.LittleEndian {
 		data[3] = p.version << 4
 		data[2] = uint8((p.pid & 0xff00) >> 8)
 		data[1] = uint8(p.pid & 0x00ff)
 		data[0] = 0xf0 | uint8(p.ptype)
-		fmt.Printf("Wrote LittleEndian header: %x\n", data)
 	} else {
 		return fmt.Errorf("Cannot write invalid packet header to byte slice.")
 	}
@@ -138,7 +136,6 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 	if len(data) < 4 {
 		return fmt.Errorf("Transaction header must be four bytes.")
 	}
-	fmt.Printf("Parsing transaction header %x\n", data[:4])
 	if order == binary.BigEndian {
 		th.version = uint8(data[0] >> 4)
 		th.id = uint16(data[1])
@@ -146,7 +143,6 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 		th.words = uint8(data[2])
 		th.tid = typeID((data[3] & 0xf0) >> 4)
 		th.code = InfoCode(data[3] & 0x0f)
-		fmt.Printf("Header: %v\n", th)
 		return nil
 	} else if order == binary.LittleEndian {
 		th.version = uint8(data[3] >> 4)
@@ -155,7 +151,6 @@ func (th *transactionheader) decode(data []byte, order binary.ByteOrder) error {
 		th.words = uint8(data[1])
 		th.tid = typeID((data[0] & 0xf0) >> 4)
 		th.code = InfoCode(data[0] & 0x0f)
-		fmt.Printf("Header: %v\n", th)
 		return nil
 	} else {
 		return fmt.Errorf("Invalid byte order to decode transaction header.")
@@ -170,7 +165,6 @@ func (th transactionheader) encode(data []byte, order binary.ByteOrder) error {
 		data[0] = (uint8(th.version) << 4) | uint8((th.id&0x0f00)>>8)
 		data[1] = uint8(th.id & 0xff)
 		data[2] = th.words
-		fmt.Printf("Encoding transaction header: %v\n", th)
 		data[3] = uint8(th.tid)<<4 | uint8(th.code)
 	} else if order == binary.LittleEndian {
 		data[3] = (uint8(th.version) << 4) | uint8((th.id&0x0f00)>>8)

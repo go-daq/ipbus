@@ -72,20 +72,18 @@ func (t Target) preparepackets() {
 		case req := <-t.requests:
 			if req.dispatch {
 				// Dispatch any queued full or partial packets
-				fmt.Printf("Dispatch request. %d packets ready.\n", len(packs))
+				if verbose {
+					fmt.Printf("Dispatch request. %d packets ready.\n", len(packs))
+				}
 				for _, p := range packs {
-					fmt.Printf("packet into h.incoming: %v\n", p)
 					t.hw.incoming <-p
 					//t.send(p)
 				}
 				packs = []*packet{}
 			} else {
 				// Add a new request to an existing or new packet
-				fmt.Printf("preparepackets() packs = %v\n", packs)
 				if len(packs) == 0 {
-					fmt.Printf("Packet list empty, adding new empty control packet.\n")
 					packs = append(packs, emptypacket(control))
-
 				}
 				p := packs[len(packs)-1]
 				// Determine if the current pack has enough space to fit the next request.
@@ -96,6 +94,7 @@ func (t Target) preparepackets() {
 				case req.typeid == read || req.typeid == readnoninc:
 					nwords := req.nwords
 					for nwords > 0 {
+						reqspace, respspace := p.space()
 						if reqspace < 2 || respspace < 2 {
 							packs = append(packs, emptypacket(control))
 							p = packs[len(packs)-1]
@@ -187,14 +186,11 @@ func (t Target) Dispatch() {
 }
 
 func (t *Target) send(p *packet) {
-	fmt.Printf("Packet going to hw.Send: %v\n", p)
 	t.hw.Send(p)
 }
 
 func (t *Target) enqueue(r usrrequest) {
-	fmt.Printf("Sending request into t.requests (%v, %d / %d)\n", t.requests, len(t.requests), cap(t.requests))
 	t.requests <- r
-	fmt.Printf("Request in channel.\n")
 }
 
 // Read nword words from register reg.
@@ -217,7 +213,6 @@ func (t Target) Write(reg Register, data []uint32) chan Response {
 		tid = writenoninc
 	}
 	r := usrrequest{tid, uint(len(data)), reg.Addr, data, resp, false, false}
-	fmt.Printf("Writing user request: %v\n", r)
 	t.enqueue(r)
 	return resp
 }

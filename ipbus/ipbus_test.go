@@ -17,12 +17,14 @@ var dt = 60 * time.Second
 var log *os.File
 var target *Target
 var nodummy *bool
+var ipbusverbose *bool
 
 
 func TestMain(m *testing.M) {
-	ipbusverbose := flag.Bool("ipbusverbose", false, "Turn on verbosity of ipbus package")
+	ipbusverbose = flag.Bool("ipbusverbose", false, "Turn on verbosity of ipbus package")
 	nodummy = flag.Bool("nodummyhardware", false, "Skip tests requiring dummy hardware.")
 	flag.Parse()
+	verbose = *ipbusverbose
 	verbose = *ipbusverbose
 	if !*nodummy {
 		startdummy()
@@ -67,6 +69,9 @@ func starttarget() {
 			panic(err)
 		}
 		target = &t
+		if *ipbusverbose {
+			target.hw.nverbose = 1
+		}
 	}
 }
 
@@ -135,7 +140,7 @@ func TestBlockReadWrite(t *testing.T) {
 	//if !ok {
 		//t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
 	//}
-	nvals := 300
+	nvals := 350
 	outdata := make([]uint32, nvals)
 	indata := make([]uint32, 0, nvals)
 	for i := 0; i < nvals; i++ {
@@ -179,13 +184,61 @@ func TestBlockReadWrite(t *testing.T) {
 	} else {
 		t.Errorf("Expected %d values, received %v", nvals, len(indata))
 	}
-	/*
-	if failunwritten {
-		t.Errorf("Test function not yet implemented.")
-	}
-	*/
 }
 
+// Test block read and block write of non-incrementing FIFO.
+// The dummy hardware FIFO just reads back the last value it received.
+func TestBlockReadWriteNonInc(t *testing.T) {
+	if *nodummy {
+		t.Skip()
+	}
+
+	testreg := Register{"FIFO", uint32(0x0100), make(map[string]uint32), true, 268435456}
+	nvals := 350
+	outdata := make([]uint32, nvals)
+	indata := make([]uint32, 0, nvals)
+	for i := 0; i < nvals; i++ {
+		outdata[i] = uint32(i)
+	}
+	t.Logf("Writing %d words to test register.", nvals)
+	t.Logf("testreg = %v\n", testreg)
+	respchan := target.Write(testreg, outdata)
+	target.Dispatch()
+	npacks := 0
+	for resp := range respchan {
+		if resp.Err != nil {
+			t.Fatal(resp.Err)
+		}
+		npacks++
+	}
+	t.Logf("Send data in %d packets.", npacks)
+
+	t.Logf("Reading %d words from test register.", nvals)
+	respchan = target.Read(testreg, uint(nvals))
+	target.Dispatch()
+	for resp := range respchan {
+		if resp.Err != nil {
+			t.Fatal(resp.Err)
+		}
+		indata = append(indata, resp.Data...)
+	}
+	if len(indata) == nvals {
+		nwrong := 0
+		for i := 0; i < nvals; i++ {
+			if indata[i] != outdata[nvals - 1] {
+				if nwrong < 3 {
+					t.Errorf("indata[%d] = 0x%x, expected 0x%x", i, indata[i], outdata[i])
+				} else {
+					t.Errorf("More than 3 wrong values...")
+					break
+				}
+				nwrong++
+			}
+		}
+	} else {
+		t.Errorf("Expected %d values, received %v", nvals, len(indata))
+	}
+}
 // Test that the library returns correct errors when going against target's permissions.
 func TestPermissions(t *testing.T) {
 	if *nodummy {
@@ -240,10 +293,15 @@ func BenchmarkSingleRead(b *testing.B) {
 	if *nodummy {
 		b.Skip()
 	}
-
+	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-
+		respchan := target.Read(testreg, 1)
+		target.Dispatch()
+		resp := <-respchan
+		if resp.Err != nil {
+			b.Fatal(resp.Err)
+		}
 	}
 
 }
@@ -253,27 +311,17 @@ func BenchmarkSingleWrite(b *testing.B) {
 	if *nodummy {
 		b.Skip()
 	}
-	/*
-		target := Target{}
-		reg := Register{}
-		nvals := 1024
-		data := make([]uint32, nvals)
-		for i := 0; i < nvals; i++ {
-			data[i] = uint32(rand.Int31())
+	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	outdata := []uint32{0xdeadbeef}
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		respchan := target.Write(testreg, outdata)
+		target.Dispatch()
+		resp := <-respchan
+		if resp.Err != nil {
+			b.Fatal(resp.Err)
 		}
-		datum := make([]uint32, 1)
-		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
-			datum[0] = data[n % nvals]
-			resp := target.Write(reg, datum)
-			target.Dispatch()
-			rep := <-resp
-			if rep.Err != nil {
-				b.Log(rep.Err)
-			}
-		}
-	*/
-
+	}
 }
 
 // Bench mark multi-packet block reads.
@@ -295,9 +343,21 @@ func BenchmarkBlockWrite(b *testing.B) {
 		b.Skip()
 	}
 
+	testreg := Register{"MEM", uint32(0x100000), make(map[string]uint32), false, 262144}
+	nword := 500
+	outdata := make([]uint32, nword)
+	for i := 0; i < nword; i++ {
+		outdata[i] = uint32(i)
+	}
+	b.Logf("Writing %d bytes.", nword * 4 * b.N)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-
+		respchan := target.Write(testreg, outdata)
+		target.Dispatch()
+		for resp := range respchan {
+			if resp.Err != nil {
+				b.Fatal(resp.Err)
+			}
+		}
 	}
-
 }

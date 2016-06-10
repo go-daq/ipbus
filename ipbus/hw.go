@@ -32,7 +32,7 @@ func newhw(conn net.Conn, dt time.Duration) *hw {
 		nextID: uint16(1), inflight: 0, maxflight: 4, 
 		reporttime: 30 * time.Second}
 	nhw += 1
-	hw.nverbose = 5
+	//hw.nverbose = 5
 	hw.init()
 	fmt.Printf("Created new hw: %v\n", hw)
 	return &hw
