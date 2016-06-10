@@ -93,10 +93,13 @@ func TestSingleReadWrite(t *testing.T) {
 	if *nodummy {
 		t.Skip()
 	}
+	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	/*
 	testreg, ok := target.Regs["REG"]
 	if !ok {
 		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
 	}
+	*/
 	testval := uint32(0xdeadbeef)
 	t.Logf("Writing single vale 0x%x to test register.", testval)
 	t.Logf("testreg = %v\n", testreg)
@@ -127,10 +130,11 @@ func TestBlockReadWrite(t *testing.T) {
 		t.Skip()
 	}
 
-	testreg, ok := target.Regs["MEM"]
-	if !ok {
-		t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
-	}
+	testreg := Register{"MEM", uint32(0x100000), make(map[string]uint32), false, 268435456}
+	//testreg, ok := target.Regs["MEM"]
+	//if !ok {
+		//t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
+	//}
 	nvals := 300
 	outdata := make([]uint32, nvals)
 	indata := make([]uint32, 0, nvals)

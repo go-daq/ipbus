@@ -15,6 +15,49 @@ type connectionset struct {
 	Conns []connection `xml:"connection"`
 }
 
+type nd struct {
+	id, description string
+	// localaddress is relative to either the bank or module that is the 
+	// immediate parent of the register
+	localaddress uint32
+}
+
+func newfile(id string, addr uint32, fn string) (file, error) {
+	return file{}, nil
+}
+
+// A single register description file.
+type file struct {
+	nd
+	fn string
+	files []file
+	modules []mod
+	registers []reg
+	class string
+}
+
+// A collection of registers
+type mod struct {
+	nd
+	description, fwinfo string
+	modules []mod
+	registers []reg
+}
+
+type reg struct {
+	nd
+	masks map[string]mask
+	read, write bool
+	mode string
+	size uint32
+}
+
+type mask struct {
+	id string
+	val uint32
+	description string
+}
+
 type node struct {
 	Id          string `xml:"id,attr"`
 	Addr        string `xml:"address,attr"`
@@ -53,7 +96,7 @@ func (b *block) register() Register {
 	return Register{b.id, b.address, masks, noninc, size}
 }
 
-func (t *Target) parseregfile(fn string, filebaseaddr uint32) error {
+func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
 	inp, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -63,10 +106,14 @@ func (t *Target) parseregfile(fn string, filebaseaddr uint32) error {
 	depth := 0
 	tabs := ""
 	name := ""
+	if basename != "" {
+		name = basename
+	}
 	baseaddr := uint32(0)
 	localaddr := uint32(0)
 	currentblock := block{}
 	currentreg := Register{}
+	toplevel := true
 	for !finished {
 		tok, err := dec.Token()
 		if err == nil {
@@ -86,13 +133,17 @@ func (t *Target) parseregfile(fn string, filebaseaddr uint32) error {
 					v := attr.Value
 					switch {
 					case n == "id":
-						if v == "TOP" {
-							regtype = "TOP"
+						if toplevel {
+							toplevel = false
 						} else {
-							if name != "" {
-								name += "." + v
+							if v == "TOP" {
+								regtype = "TOP"
 							} else {
-								name = v
+								if name != "" {
+									name += "." + v
+								} else {
+									name = v
+								}
 							}
 						}
 					case n == "address":
@@ -125,6 +176,7 @@ func (t *Target) parseregfile(fn string, filebaseaddr uint32) error {
 						t.Regs[currentblock.id] = currentblock.register()
 					}
 					currentblock = block{name, baseaddr + localaddr, description, fwinfo, mode}
+					fmt.Printf("Found block: %s\n", name)
 				case regtype == "reg":
 					if currentreg.Name != "" {
 						t.Regs[currentreg.Name] = currentreg
@@ -139,7 +191,7 @@ func (t *Target) parseregfile(fn string, filebaseaddr uint32) error {
 					modfn := strings.Replace(module, "file://", "", 1)
 					dir, _ := filepath.Split(fn)
 					modfn = filepath.Join(dir, modfn)
-					if err := t.parseregfile(modfn, localaddr); err != nil {
+					if err := t.parseregfile(modfn, name, localaddr); err != nil {
 						return err
 					}
 				}
@@ -175,7 +227,7 @@ func (t *Target) parse(fn string) error {
 			t.dest = strings.Replace(conn.URI, "ipbusudp-2.0://", "", 1)
 			//ns := nodes{}
 			addr := strings.Replace(conn.Address, "file://", "", 1)
-			if err := t.parseregfile(addr, uint32(0)); err != nil {
+			if err := t.parseregfile(addr, "", uint32(0)); err != nil {
 				return err
 			}
 		}

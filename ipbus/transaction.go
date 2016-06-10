@@ -219,7 +219,7 @@ func (p *packet) add(trans transaction) error {
 
 	// Fill the outgoing packet
 	transhead := []byte{0, 0, 0, 0}
-	fmt.Printf("0: header order = %v\n", p.header.order)
+	//fmt.Printf("0: header order = %v\n", p.header.order)
 	err := trans.outheader.encode(transhead, p.header.order)
 	if err != nil {
 		fmt.Printf("Error encoding transaction header: %v\n", err)
@@ -232,8 +232,8 @@ func (p *packet) add(trans transaction) error {
 	for i, val := range trans.Input {
 		fmt.Printf("i = %d, val = %d = 0x%x\n", i, val, val)
 		buffer := data[(i + 1) * 4:]
-		fmt.Printf("Putting 0x%x into %v\n", val, buffer)
-		fmt.Printf("1: header order = %v\n", p.header.order)
+		//fmt.Printf("Putting 0x%x into %v\n", val, buffer)
+		//fmt.Printf("1: header order = %v\n", p.header.order)
 		p.header.order.PutUint32(buffer, val)
 	}
 	fmt.Printf("data = %x\n", data)

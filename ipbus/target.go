@@ -47,7 +47,7 @@ func New(name, fn string, conn net.Conn) (Target, error) {
 			t.hw.SetVerbose(1)
 		}
 		go t.hw.Run()
-		err := t.parseregfile(fn, uint32(0))
+		err := t.parseregfile(fn, "", uint32(0))
 	return t, err
 }
 
@@ -112,6 +112,10 @@ func (t Target) preparepackets() {
 						// add read request with ntoread words
 						final := nwords == 0
 						t := newrequesttransaction(req.typeid, uint8(ntoread), req.addr, req.Input, req.resp, req.byteslice, final)
+						if req.typeid == read {
+							req.addr += uint32(ntoread)
+
+						}
 						p.add(t)
 					}
 				case req.typeid == write || req.typeid == writenoninc:
@@ -138,6 +142,10 @@ func (t Target) preparepackets() {
 							req.Input[index:index+ntowrite],
 							req.resp, req.byteslice, final)
 						p.add(t)
+						if req.typeid == write {
+							req.addr += uint32(ntowrite)
+
+						}
 						index += ntowrite
 					}
 				case req.typeid == rmwbits:
