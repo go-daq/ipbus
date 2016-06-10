@@ -11,8 +11,8 @@ The client library allows software to read and write values to IPbus registers i
 The Go implementation was first developed as part of the read-out system of the 288 kg prototype SoLid anti-neutrino detector (http://arxiv.org/abs/1510.07835).
 The code was then split into a package for use in the full scale SoLid detector.
 
-Installation
-------------
+Installation and usage
+-----------------------
 
 Once you have set up your Go work area you can instal the goipbus package with the following command:
 
@@ -61,6 +61,14 @@ You can skip all tests that require the dummy hardware with the command:
 ````
 go test -nodummyhardware
 ```` 
+
+Documentation
+-------------
+
+The documentation for the `goipbus` package can be found at:
+
+https://godoc.org/bitbucket.org/NickRyder/goipbis/ipbus
+
 
 License
 -------
