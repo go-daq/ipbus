@@ -13,9 +13,12 @@
    id="svg3039"
    version="1.1"
    inkscape:version="0.48.4 r9939"
-   width="4193.8501"
+   width="3861"
    height="3861"
-   sodipodi:docname="goipbuslogo.svg">
+   sodipodi:docname="goipbuslogo.svg"
+   inkscape:export-filename="/home/ryder/ipbus/src/bitbucket.org/NickRyder/goipbus/goipbuslogo.png"
+   inkscape:export-xdpi="42.867348"
+   inkscape:export-ydpi="42.867348">
   <metadata
      id="metadata3045">
     <rdf:RDF>
@@ -54,11 +57,6 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0" />
-  <path
-     style="fill:none;stroke:#000000;stroke-width:30;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
-     d="M 3342.5525,1617.2787 3079.3594,117.07802"
-     id="path3053"
-     inkscape:connector-curvature="0" />
   <image
      width="3861"
      height="3861"
@@ -4250,27 +4248,17 @@ wIRTKgYAAAAAAAAAAAAAAAAAgAn3/6Jn7/S4Hv+pAAAAAElFTkSuQmCC
      id="image3047"
      x="0"
      y="0" />
-  <path
-     style="fill:none;stroke:#000000;stroke-width:5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
-     d="m 3105.6787,255.2544 1085.6716,59.21845 -967.2347,644.82312"
-     id="path3823"
-     inkscape:connector-curvature="0" />
-  <path
-     style="fill:#00ffff;fill-opacity:1;stroke:none"
-     d="m 3240.9576,930.08653 c -5.4174,-17.37226 -116.5501,-664.17297 -114.4372,-666.03298 3.2336,-2.84651 1032.6489,54.13654 1035.8517,57.33933 1.4871,1.48714 -204.6377,140.92773 -458.0552,309.86798 C 3421.9203,819.52 3242.5513,935.19708 3240.9576,930.08653 z"
-     id="path3841"
-     inkscape:connector-curvature="0" />
   <text
      xml:space="preserve"
      style="font-size:20px;font-style:normal;font-weight:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
-     x="3401.6873"
-     y="1199.2274"
+     x="1529.988"
+     y="3155.7263"
      id="text3049"
      sodipodi:linespacing="125%"
-     transform="matrix(0.98134654,-0.19224713,0.19224713,0.98134654,0,0)"><tspan
+     transform="matrix(0.96211945,-0.27262826,0.27262826,0.96211945,0,0)"><tspan
        sodipodi:role="line"
        id="tspan3051"
-       x="3401.6873"
-       y="1199.2274"
-       style="font-size:256px">IPbus</tspan></text>
+       x="1529.988"
+       y="3155.7263"
+       style="font-size:600px">IPbus</tspan></text>
 </svg>

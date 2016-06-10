@@ -6,6 +6,42 @@ IPbus2.0 client library implemented in go.
 The IPbus protocol allows communication with an FPGA via TCP or UDP.
 The client library allows software to read and write values to IPbus registers in the FPGA target.
 
+Installation
+------------
+
+Once you have set up your Go work area you can instal the goipbus package with the following command:
+
+````
+go get bitbucket.org/NickRyder/goipbus/ipbus
+````
+
+and then use it in your code, such as:
+````
+#!go
+package main
+
+import (
+    "bitbucket.org/NickRyder/goipbus/ipbus"
+    "net"
+)
+
+func main() 
+    conn, err := net.Dial("udp4", "localhost:50001")
+    // Handle error...
+    fn := "hardwaredescription.xml"
+    target := ipbus.New("DAQ", fn, conn)
+    fifo := target.Regs["FIFO"]
+    repchan := target.Read(fifo, 1024)
+    // target.Dispatch() // This would block until all packets are received
+    go target.Dispatch() // This lets you handle each packet as it arrives
+    for rep := range repchan {
+        if rep.Err != nil {
+            //handle error
+        }
+        process(rep.Data)
+    }
+}
+````
 Dependencies
 ------------
 
@@ -21,8 +57,6 @@ You can skip all tests that require the dummy hardware with the command:
 go test -nodummyhardware
 ```` 
 
-
-
 License
 -------
 
@@ -31,5 +65,12 @@ This software is released under a 3-clause BSD license, see [[License.md]] or ca
 Versions
 --------
 
+The current version of the goipbus package is 0.1.
+The version can be accessed as `ipbus.PackageVersion`.
+
 **I am currently working towards getting a stable API with basic functionality tested, which will be released publicly as v1.0.**
 
+Logo
+----
+
+The goipbus logo uses the `gophercolor` image (see https://golang.org/doc/gopher/) designed by Renee French.
