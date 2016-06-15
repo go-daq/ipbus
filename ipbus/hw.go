@@ -26,7 +26,7 @@ import (
 
 var nhw = 0
 
-func newhw(conn net.Conn, dt time.Duration) *hw {
+func newhw(conn *net.UDPConn, dt time.Duration) *hw {
 	raddr := conn.RemoteAddr()
 	hw := hw{Num: nhw, conn: conn, raddr: raddr, waittime: dt, 
 		nextID: uint16(1), inflight: 0, maxflight: 4, 
@@ -42,7 +42,7 @@ type hw struct {
 	Num        int
 	replies    chan hwpacket
 	//errs       chan data.ErrPack // Channel to send errors to whomever cares.
-	conn       net.Conn      // UDP connection with the device.
+	conn       *net.UDPConn      // UDP connection with the device.
 	raddr      net.Addr      // UDP address of the hardware device.
 	configured bool              // Flag to ensure connection is configured, etc. before
 	// attempting to send data.
@@ -94,7 +94,7 @@ func (h *hw) init() {
 }
 
 func (h hw) String() string {
-	return fmt.Sprintf("hw%d: in = %p, RAddr = %v, dt = %v", h.Num, &h.tosend, h.raddr, h.waittime)
+	return fmt.Sprintf("hw%d: LAddr = %v, RAddr = %v, dt = %v", h.Num, h.conn.LocalAddr(), h.raddr, h.waittime)
 }
 
 // Connect to hw's UDP socket.

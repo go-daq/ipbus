@@ -47,7 +47,7 @@ func (cm CM) Target(name string) (Target, error) {
 	addr := ""
 	for _, conn := range cm.connlist.Conns {
 		if conn.Id == name {
-			dest = strings.Replace(conn.URI, "ipbusudp-2.0//", "", 1)
+			dest = strings.Replace(conn.URI, "ipbusudp-2.0://", "", 1)
 			addr = strings.Replace(conn.Address, "file://", "", 1)
 			addr = filepath.Join(dir, addr)
 		}
@@ -55,7 +55,11 @@ func (cm CM) Target(name string) (Target, error) {
 	if dest == "" {
 		return Target{}, fmt.Errorf("Connection '%s' not found.", name)
 	}
-	conn, err := net.Dial("udp", "localhost:60001")
+    raddr, err := net.ResolveUDPAddr("udp4", dest)
+    if err != nil {
+        return Target{}, err
+    }
+	conn, err := net.DialUDP("udp", nil, raddr)
 	if err != nil {
 		panic(err)
 	}

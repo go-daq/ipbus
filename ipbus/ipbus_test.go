@@ -17,12 +17,15 @@ var dt = 60 * time.Second
 var log *os.File
 var target *Target
 var nodummy *bool
+var trenztarget *Target
+var trenz *bool
 var ipbusverbose *bool
 
 
 func TestMain(m *testing.M) {
 	ipbusverbose = flag.Bool("ipbusverbose", false, "Turn on verbosity of ipbus package")
 	nodummy = flag.Bool("nodummyhardware", false, "Skip tests requiring dummy hardware.")
+    trenz = flag.Bool("trenzhardware", false, "Enable tests against Trenz board.")
 	flag.Parse()
 	verbose = *ipbusverbose
 	verbose = *ipbusverbose
@@ -34,12 +37,37 @@ func TestMain(m *testing.M) {
 	if testing.Verbose() {
 		fmt.Printf("Target regs: %v\n", target.Regs)
 	}
+    if *trenz {
+        starttrenz()
+    }
 	code := m.Run()
 	if !*nodummy {
 		dummy.Kill <-true
 	}
 	time.Sleep(time.Second)
 	os.Exit(code)
+}
+
+func starttrenz() {
+	if trenztarget == nil {
+        raddr, err := net.ResolveUDPAddr("udp4", "192.168.235.0:50001")
+        if err != nil {
+            panic(err)
+        }
+		conn, err := net.DialUDP("udp4", nil, raddr)
+		if err != nil {
+			panic(err)
+		}
+		t, err := New("dummy", "xml/dummy_address.xml", conn)
+		if err != nil {
+			panic(err)
+		}
+		trenztarget = &t
+		if *ipbusverbose {
+			trenztarget.hw.nverbose = 1
+		}
+	}
+
 }
 
 func startdummy() {
@@ -60,7 +88,11 @@ func startdummy() {
 
 func starttarget() {
 	if target == nil {
-		conn, err := net.Dial("udp4", "localhost:60001")
+        raddr, err := net.ResolveUDPAddr("udp4", "localhost:60001")
+        if err != nil {
+            panic(err)
+        }
+		conn, err := net.DialUDP("udp4", nil, raddr)
 		if err != nil {
 			panic(err)
 		}
@@ -298,6 +330,50 @@ func BenchmarkSingleRead(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		respchan := target.Read(testreg, 1)
 		target.Dispatch()
+		resp := <-respchan
+		if resp.Err != nil {
+			b.Fatal(resp.Err)
+		}
+	}
+
+}
+
+// Bench mark single word read.
+func BenchmarkSingleReadTrenz(b *testing.B) {
+	if ! *trenz {
+        b.Log("Skipping benchmark against Trenz board.")
+		b.Skip()
+	}
+/*
+    raddr, err := net.ResolveUDPAddr("udp4", "192.168.235.0:50001")
+    if err != nil {
+        b.Fatal(err)
+    }
+    conn, err := net.DialUDP("udp", laddr, raddr)
+    if err != nil {
+        panic(err)
+    }
+    b.Logf("conn, err = %v, %v", *conn, err)
+    b.Logf("laddr = %v", conn.LocalAddr())
+    trenz, err := New("Trenz", "xml/dummy_address.xml", conn)
+    if err != nil {
+        panic(err)
+    }
+    time.Sleep(10 * time.Second)
+*/
+    
+	testreg := Register{"ctrl_reg.ctrl", uint32(0x0), make(map[string]uint32), false, 1}
+    b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
+    respchan := trenztarget.Read(testreg, 1)
+    trenztarget.Dispatch()
+    resp := <-respchan
+    if resp.Err != nil {
+        b.Fatal(resp.Err)
+    }
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		respchan := trenztarget.Read(testreg, 1)
+		trenztarget.Dispatch()
 		resp := <-respchan
 		if resp.Err != nil {
 			b.Fatal(resp.Err)

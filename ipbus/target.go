@@ -33,7 +33,7 @@ type Target struct {
 }
 
 // Create a new target by parsing an XML file description.
-func New(name, fn string, conn net.Conn) (Target, error) {
+func New(name, fn string, conn *net.UDPConn) (Target, error) {
 		regs := make(map[string]Register)
 		reqs := make(chan usrrequest)
 		fp := make(chan bool)
