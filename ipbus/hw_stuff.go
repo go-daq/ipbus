@@ -17,7 +17,7 @@ func newResendPacket(id uint16) []byte {
 }
 
 func newStatusPacket() []byte {
-	data := make([]byte, 60)
+	data := make([]byte, 64)
 	data[0] = uint8(protocolversion) << 4
 	boq := uint8(0xf0)
 	data[3] = boq | uint8(status)
