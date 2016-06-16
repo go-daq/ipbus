@@ -67,7 +67,7 @@ Documentation
 
 The documentation for the `goipbus` package can be found at:
 
-https://godoc.org/bitbucket.org/NickRyder/goipbis/ipbus
+https://godoc.org/bitbucket.org/NickRyder/goipbus/ipbus
 
 
 License
