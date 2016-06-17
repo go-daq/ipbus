@@ -557,6 +557,82 @@ func BenchmarkMultiReadTrenz(b *testing.B) {
 	}
 }
 
+// Bench mark single word read.
+func BenchmarkMultiReadBTrenz(b *testing.B) {
+	if ! *trenz {
+        b.Log("Skipping benchmark against Trenz board.")
+		b.Skip()
+	}
+    // Organise registers and masks
+	fifo , ok := trenztarget.Regs["chan.fifo"]
+    if !ok {
+        b.Fatal("Failed to find reg `chan.fifo` in trenz register map.")
+    }
+    timingCsrCtrl, ok := trenztarget.Regs["timing.csr.ctrl"]
+    if !ok {
+        b.Fatal("Failed to find reg `timing.csr.ctrl` in trenz register map.")
+    }
+    chancap, ok := timingCsrCtrl.Masks["chan_cap"]
+    if !ok {
+        b.Fatal("Failed to find mask `chan_cap` in `timing.csr.ctrl` register.")
+    }
+    ctrlregCtrl, ok := trenztarget.Regs["ctrl_reg.ctrl"]
+    if !ok {
+        b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
+    }
+    chansel, ok := ctrlregCtrl.Masks["chan"]
+    if !ok {
+        b.Fatal("Failed to find mask `chan` in `ctrl_reg.ctrl` register.")
+    }
+
+    // Do first trigger and select channel 0
+    triggerand := uint32(0xffffffff &^ chancap)
+    selectand := uint32(0xffffffff &^ chansel)
+    b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
+    respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap)
+    respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
+    respchanselect := trenztarget.RMWbits(ctrlregCtrl, selectand, uint32(0))
+    trenztarget.Dispatch()
+    resp := <-respchantrig1
+    if resp.Err != nil {
+        b.Fatal(resp.Err)
+    }
+    resp = <-respchantrig0
+    if resp.Err != nil {
+        b.Fatal(resp.Err)
+    }
+    resp = <-respchanselect
+    if resp.Err != nil {
+        b.Fatal(resp.Err)
+    }
+    b.Logf("First trigger and selected channel 0.")
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+        // Read 2048 words then trigger again
+		respchan := trenztarget.ReadB(fifo, 2048)
+        respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap)
+        respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
+		trenztarget.Dispatch()
+        ntrans := 0
+        nword := 0
+		for resp := range respchan {
+            if resp.Err != nil {
+                b.Fatal(resp.Err)
+            }
+            ntrans += 1
+            nword += len(resp.DataB)
+        }
+        //b.Logf("Received %d words in %d transactions.", nword, ntrans)
+        resp = <-respchantrig1
+		if resp.Err != nil {
+			b.Fatal(resp.Err)
+		}
+        resp = <-respchantrig0
+		if resp.Err != nil {
+			b.Fatal(resp.Err)
+		}
+	}
+}
 // Bench mark single word write.
 func BenchmarkSingleWrite(b *testing.B) {
 	if *nodummy {
