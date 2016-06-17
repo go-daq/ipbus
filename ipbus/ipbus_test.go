@@ -162,7 +162,7 @@ func TestSingleReadWrite(t *testing.T) {
 }
 
 // Test block read and block write.
-func TestBlockReadWrite(t *testing.T) {
+func TestBlockReadWriteInc(t *testing.T) {
 	if *nodummy {
 		t.Skip()
 	}
@@ -172,7 +172,7 @@ func TestBlockReadWrite(t *testing.T) {
 	//if !ok {
 		//t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
 	//}
-	nvals := 350
+	nvals := 364
 	outdata := make([]uint32, nvals)
 	indata := make([]uint32, 0, nvals)
 	for i := 0; i < nvals; i++ {
@@ -182,24 +182,32 @@ func TestBlockReadWrite(t *testing.T) {
 	t.Logf("testreg = %v\n", testreg)
 	respchan := target.Write(testreg, outdata)
 	target.Dispatch()
-	npacks := 0
+	ntrans := 0
+    wordspertrans := make([]int, 0, 8)
 	for resp := range respchan {
 		if resp.Err != nil {
 			t.Fatal(resp.Err)
 		}
-		npacks++
+		ntrans++
+        wordspertrans = append(wordspertrans, len(resp.Data))
 	}
-	t.Logf("Send data in %d packets.", npacks)
+	t.Logf("Send data in %d transactions: %v.", ntrans, wordspertrans)
 
 	t.Logf("Reading %d words from test register.", nvals)
 	respchan = target.Read(testreg, uint(nvals))
 	target.Dispatch()
+    ntrans = 0
+    wordspertrans = make([]int, 0, 8)
 	for resp := range respchan {
 		if resp.Err != nil {
 			t.Fatal(resp.Err)
 		}
 		indata = append(indata, resp.Data...)
+		ntrans++
+        wordspertrans = append(wordspertrans, len(resp.Data))
 	}
+	t.Logf("Received data in %d transactions: %v.", ntrans, wordspertrans)
+
 	if len(indata) == nvals {
 		nwrong := 0
 		for i := 0; i < nvals; i++ {
