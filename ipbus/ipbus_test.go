@@ -161,6 +161,102 @@ func TestSingleReadWrite(t *testing.T) {
 	t.Logf("Read word 0x%x", value)
 }
 
+func TestRMWbits(t *testing.T) {
+	if *nodummy {
+		t.Skip()
+	}
+	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	/*
+	testreg, ok := target.Regs["REG"]
+	if !ok {
+		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
+	}
+	*/
+	testval := uint32(0xdeadbeef)
+	andterm := uint32(0x0f0f0f0f)
+	orterm := uint32(0xfedcba98)
+	expectedresult := (testval & andterm) | orterm
+	t.Logf("Writing single vale 0x%x to test register.", testval)
+	t.Logf("testreg = %v\n", testreg)
+	respchan := target.Write(testreg, []uint32{testval})
+	target.Dispatch()
+	resp := <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
+	t.Logf("RMWbits word in test register.")
+	respchan = target.RMWbits(testreg, andterm, orterm)
+	target.Dispatch()
+	resp = <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
+	value := resp.Data[0]
+	if value != testval {
+		t.Fatal("Reply from RMWbits value is 0x%x, expected 0x%x", value, testval)
+	}
+	t.Logf("Read word from test register.")
+	respchan = target.Read(testreg, 1)
+	target.Dispatch()
+	resp = <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
+	value = resp.Data[0]
+	if value != expectedresult {
+		t.Fatalf("Read value 0x%x, expected 0x%x", value, expectedresult)
+	}
+	t.Logf("After RMWbits read word 0x%x", value)
+}
+
+func TestRMWsum(t *testing.T) {
+	if *nodummy {
+		t.Skip()
+	}
+	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	/*
+	testreg, ok := target.Regs["REG"]
+	if !ok {
+		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
+	}
+	*/
+	testval := uint32(0xdeadbeef)
+	addend := uint32(0x0f0f0f0f)
+	expectedresult := testval + addend
+	t.Logf("Writing single vale 0x%x to test register.", testval)
+	t.Logf("testreg = %v\n", testreg)
+	respchan := target.Write(testreg, []uint32{testval})
+	target.Dispatch()
+	resp := <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
+	t.Logf("RMWsum word in test register.")
+	respchan = target.RMWsum(testreg, addend)
+	target.Dispatch()
+	resp = <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
+	value := resp.Data[0]
+	if value != testval {
+		t.Fatal("Reply from RMWsum value is 0x%x, expected 0x%x", value, testval)
+	}
+	t.Logf("Read word from test register.")
+	respchan = target.Read(testreg, 1)
+	target.Dispatch()
+	resp = <-respchan
+	if resp.Err != nil {
+		t.Fatal(resp.Err)
+	}
+	value = resp.Data[0]
+	if value != expectedresult {
+		t.Fatalf("Read value 0x%x, expected 0x%x", value, expectedresult)
+	}
+	t.Logf("After RMWsum read word 0x%x", value)
+}
+
+
 // Test block read and block write.
 func TestBlockReadWriteInc(t *testing.T) {
 	if *nodummy {
