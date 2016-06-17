@@ -24,7 +24,6 @@ func TestParserMissingTarget(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
-    t.Skip()
 	cm, err := NewCM("xml/testconnections.xml")
 	if err != nil {
 		t.Fatal(err)
