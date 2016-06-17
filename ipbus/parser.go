@@ -82,7 +82,8 @@ type block struct {
 }
 
 func (b *block) register() Register {
-	masks := make(map[string]uint32)
+	msks := make(map[string]msk)
+	masks := make([]string, 0, 8)
 	noninc := b.mode == "port"
 	vals := strings.Split(b.fwinfo, ";")
 	size := 0
@@ -93,7 +94,7 @@ func (b *block) register() Register {
 			size = int(sizeval) + 1
 		}
 	}
-	return Register{b.id, b.address, masks, noninc, size}
+	return Register{b.id, b.address, masks, noninc, size, msks}
 }
 
 func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
@@ -181,12 +182,15 @@ func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
 					if currentreg.Name != "" {
 						t.Regs[currentreg.Name] = currentreg
 					}
-					masks := make(map[string]uint32)
+					masks := make([]string, 0, 8)
+					msks := make(map[string]msk)
 					noninc := currentblock.mode == "port"
-					currentreg = Register{name, baseaddr + localaddr, masks, noninc, 1}
+					currentreg = Register{name, baseaddr + localaddr, masks, noninc, 1, msks}
 				case regtype == "mask":
 					names := strings.Split(name, ".")
-					currentreg.Masks[names[len(names)-1]] = mask
+					maskname := names[len(names)-1]
+					currentreg.Masks = append(currentreg.Masks, maskname)
+					currentreg.msks[maskname] = newmask(maskname, mask)
 				case regtype == "mod":
 					modfn := strings.Replace(module, "file://", "", 1)
 					dir, _ := filepath.Split(fn)
