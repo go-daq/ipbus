@@ -268,7 +268,7 @@ func TestBlockReadWriteInc(t *testing.T) {
 	//if !ok {
 		//t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
 	//}
-	nvals := 364
+	nvals := 1000
 	outdata := make([]uint32, nvals)
 	indata := make([]uint32, 0, nvals)
 	for i := 0; i < nvals; i++ {
@@ -510,8 +510,18 @@ func BenchmarkBlockRead(b *testing.B) {
 		b.Skip()
 	}
 
+	testreg := Register{"MEM", uint32(0x100000), make(map[string]uint32), false, 262144}
+	nword := 1000
+	b.Logf("Writing %d bytes.", nword * 4 * b.N)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
+		respchan := target.Read(testreg, 1)
+		target.Dispatch()
+		for resp := range respchan {
+			if resp.Err != nil {
+				b.Fatal(resp.Err)
+			}
+		}
 
 	}
 
@@ -524,7 +534,7 @@ func BenchmarkBlockWrite(b *testing.B) {
 	}
 
 	testreg := Register{"MEM", uint32(0x100000), make(map[string]uint32), false, 262144}
-	nword := 500
+	nword := 1000
 	outdata := make([]uint32, nword)
 	for i := 0; i < nword; i++ {
 		outdata[i] = uint32(i)
