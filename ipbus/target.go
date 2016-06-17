@@ -121,12 +121,13 @@ func (t Target) preparepackets() {
 					nwords := uint(len(req.Input))
 					index := uint(0)
 					for nwords > 0 {
+                        reqspace, respspace = p.space()
 						if reqspace < 3 || respspace < 1 {
 							packs = append(packs, emptypacket(control))
 							p = packs[len(packs)-1]
 							reqspace, respspace = p.space()
 						}
-						ntowrite := reqspace - 1
+						ntowrite := reqspace - 2
 						if ntowrite > nwords {
 							ntowrite = nwords
 						}
@@ -140,7 +141,9 @@ func (t Target) preparepackets() {
 							req.addr,
 							req.Input[index:index+ntowrite],
 							req.resp, req.byteslice, final)
-						p.add(t)
+						if err := p.add(t); err != nil {
+                            panic(err)
+                        }
 						if req.typeid == write {
 							req.addr += uint32(ntowrite)
 
