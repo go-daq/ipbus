@@ -98,6 +98,7 @@ func (b *block) register() Register {
 }
 
 func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
+	//fmt.Printf("Parsing file '%s' with name '%s' at 0x%x\n", fn, basename, filebaseaddr)
 	inp, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -177,7 +178,7 @@ func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
 						t.Regs[currentblock.id] = currentblock.register()
 					}
 					currentblock = block{name, baseaddr + localaddr, description, fwinfo, mode}
-					fmt.Printf("Found block: %s\n", name)
+					//fmt.Printf("Found block: '%s' at 0x%x -> 0x%x\n", name, localaddr, baseaddr + localaddr)
 				case regtype == "reg":
 					if currentreg.Name != "" {
 						t.Regs[currentreg.Name] = currentreg
@@ -195,7 +196,7 @@ func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
 					modfn := strings.Replace(module, "file://", "", 1)
 					dir, _ := filepath.Split(fn)
 					modfn = filepath.Join(dir, modfn)
-					if err := t.parseregfile(modfn, name, localaddr); err != nil {
+					if err := t.parseregfile(modfn, name, localaddr + filebaseaddr); err != nil {
 						return err
 					}
 				}

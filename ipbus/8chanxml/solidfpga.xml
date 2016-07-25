@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<connections>
+  <connection id="SoLidFPGA"          uri="ipbusudp-2.0://192.168.235.0:50001" address_table="file://addr_table/top.xml" />
+</connections>
