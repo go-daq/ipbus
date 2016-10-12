@@ -249,3 +249,19 @@ func (t Target) ReadB(reg Register, nword uint) chan Response {
 	t.enqueue(r)
 	return resp
 }
+
+// MaskedWrite performs a RMWbits for updarting the masked part of the register to the given value
+func (t Target) MaskedWrite(reg Register, mask string, value uint32) (chan Response, error) {
+	m, ok := reg.Masks[mask]
+	if !ok {
+		return make(chan Response), fmt.Errorf("MaskedWrite(): reg %v has no mask %s", reg, mask)
+	}
+	andterm := 0xffffffff ^ m
+	shift := uint(0)
+	for (0x1 << shift) & m == 0 {
+		shift++
+	}
+	orterm := value << shift
+	resp := t.RMWbits(reg, andterm, orterm)
+	return resp, nil
+}
