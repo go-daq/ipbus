@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func NewDummy(port int) DummyHardware {
+func newDummy(port int) dummyHardware {
 	/*
 		cmdstring := "DummyHardwareUdp.exe"
 		args := []string{"--version", "w", "--port"}
@@ -16,7 +16,7 @@ func NewDummy(port int) DummyHardware {
 	*/
 	cmd := exec.Command("DummyHardwareUdp.exe", "--version", "2",
 		"-b", "-V", "--port", fmt.Sprintf("%d", port))
-	dummy := DummyHardware{cmd, false, make(chan bool)}
+	dummy := dummyHardware{cmd, false, make(chan bool)}
 	return dummy
 }
 
@@ -25,13 +25,13 @@ func NewDummy(port int) DummyHardware {
 // not exported. It requires a local installation of the uhal package,
 // which itself requires running SLC6 or similar. This is the only
 // part of the ipbus package with that requirement.
-type DummyHardware struct {
+type dummyHardware struct {
 	cmd     *exec.Cmd
 	running bool
 	Kill chan bool
 }
 
-func (d *DummyHardware) Start() error {
+func (d *dummyHardware) Start() error {
 	err := error(nil)
 	if !d.running {
 		fmt.Printf("Starting cmd: %v\n", d.cmd)
@@ -42,7 +42,7 @@ func (d *DummyHardware) Start() error {
 	return err
 }
 
-func (d DummyHardware) Run(dt time.Duration, log io.WriteCloser) {
+func (d dummyHardware) Run(dt time.Duration, log io.WriteCloser) {
 	if d.running {
 		return
 	}
@@ -78,12 +78,12 @@ func (d DummyHardware) Run(dt time.Duration, log io.WriteCloser) {
 	}
 }
 
-func (d DummyHardware) wait(errchan chan error) {
+func (d dummyHardware) wait(errchan chan error) {
 	err := d.cmd.Wait()
 	errchan <-err
 }
 
-func (d *DummyHardware) Stop() error {
+func (d *dummyHardware) Stop() error {
 	err := error(nil)
 	if d.running {
 		err = d.cmd.Process.Kill()

@@ -1,0 +1,19 @@
+<node id="sc_io" description="IO controllers" fwinfo="endpoint">
+	<node id="csr" address="0x0" description="ctrl/stat register" fwinfo="endpoint;width=1">
+		<node id="ctrl" address="0x0">
+			<node id="si5326_rst" mask="0x1"/>
+			<node id="si5326_clk_sel" mask="0x2"/>
+			<node id="si5326_rate0" mask="0x4"/>
+			<node id="si5326_rate1" mask="0x8"/>
+		</node>
+		<node id="stat" address="0x1">
+			<node id="si5326_lol" mask="0x1"/>
+			<node id="si5326_clk1_validn" mask="0x2"/>
+			<node id="si5326_clk2_validn" mask="0x4"/>
+		</node>
+	</node>
+	<node id="freq_ctr" address="0x4" module="file://freq_ctr.xml"/>
+	<node id="clock_i2c" address="0x8" module="file://opencores_i2c.xml"/>
+	<node id="spi" address="0x10" module="file://opencores_spi.xml"/>
+	<node id="analog_i2c" address="0x18" module="file://opencores_i2c.xml"/>
+</node>

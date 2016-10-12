@@ -1,0 +1,15 @@
+<node id="chan_standalone" description="channel controls" fwinfo="endpoint">
+	<node id="csr" address="0x0" description="ctrl/status register" fwinfo="endpoint;width=1">
+		<node id="ctrl" address="0x0">
+			<node id="en_sync" mask="0x1"/>
+			<node id="en_comp" mask="0x2"/>
+			<node id="patt" mask="0x3fff0000"/>
+		</node>
+		<node id="stat" address="0x1">
+			<node id="empty" mask="0x1"/>
+			<node id="full" mask="0x2"/>
+			<node id="err_cnt" mask="0xffff0000"/>
+		</node>
+	</node>
+	<node id="fifo" address="0x2" mode="port" description="channel FIFO" fwinfo="endpoint;width=0"/>
+</node>

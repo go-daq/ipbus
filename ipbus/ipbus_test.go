@@ -13,7 +13,7 @@ import (
 )
 
 const failunwritten = false
-var dummy *DummyHardware
+var dummy *dummyHardware
 var dt = 60 * time.Second
 var log *os.File
 var target *Target
@@ -85,7 +85,7 @@ func startdummy() {
 		cmd := exec.Command("killall", "DummyHardwareUdp.exe")
 		err := cmd.Run()
 		fmt.Printf("killall DummyHardwareUdp.exe: %v\n", err)
-		d := NewDummy(60001)
+		d := newDummy(60001)
 		dummy = &d
 		log, err := os.Create("dummyhardwarelog.txt")
 		if err != nil {
@@ -140,7 +140,7 @@ func TestSingleReadWrite(t *testing.T) {
 	if *nodummy {
 		t.Skip()
 	}
-	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	/*
 	testreg, ok := target.Regs["REG"]
 	if !ok {
@@ -175,7 +175,7 @@ func TestRMWbits(t *testing.T) {
 	if *nodummy {
 		t.Skip()
 	}
-	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	/*
 	testreg, ok := target.Regs["REG"]
 	if !ok {
@@ -223,7 +223,7 @@ func TestRMWsum(t *testing.T) {
 	if *nodummy {
 		t.Skip()
 	}
-	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	/*
 	testreg, ok := target.Regs["REG"]
 	if !ok {
@@ -273,7 +273,7 @@ func TestBlockReadWriteInc(t *testing.T) {
 		t.Skip()
 	}
 
-	testreg := Register{"MEM", uint32(0x100000), make(map[string]uint32), false, 268435456}
+	testreg := Register{"MEM", uint32(0x100000), make([]string, 0), false, 268435456, make(map[string]msk)}
 	//testreg, ok := target.Regs["MEM"]
 	//if !ok {
 		//t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
@@ -339,7 +339,7 @@ func TestBlockReadWriteNonInc(t *testing.T) {
 		t.Skip()
 	}
 
-	testreg := Register{"FIFO", uint32(0x0100), make(map[string]uint32), true, 268435456}
+	testreg := Register{"FIFO", uint32(0x0100), make([]string, 0), true, 268435456, make(map[string]msk)}
 	nvals := 350
 	outdata := make([]uint32, nvals)
 	indata := make([]uint32, 0, nvals)
@@ -439,7 +439,7 @@ func BenchmarkSingleRead(b *testing.B) {
 	if *nodummy {
 		b.Skip()
 	}
-	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		respchan := target.Read(testreg, 1)
@@ -495,7 +495,7 @@ func BenchmarkMultiReadTrenz(b *testing.B) {
     if !ok {
         b.Fatal("Failed to find reg `timing.csr.ctrl` in trenz register map.")
     }
-    chancap, ok := timingCsrCtrl.Masks["chan_cap"]
+    chancap, ok := timingCsrCtrl.msks["chan_cap"]
     if !ok {
         b.Fatal("Failed to find mask `chan_cap` in `timing.csr.ctrl` register.")
     }
@@ -503,16 +503,16 @@ func BenchmarkMultiReadTrenz(b *testing.B) {
     if !ok {
         b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
     }
-    chansel, ok := ctrlregCtrl.Masks["chan"]
+	chansel, ok := ctrlregCtrl.msks["chan"]
     if !ok {
         b.Fatal("Failed to find mask `chan` in `ctrl_reg.ctrl` register.")
     }
 
     // Do first trigger and select channel 0
-    triggerand := uint32(0xffffffff &^ chancap)
-    selectand := uint32(0xffffffff &^ chansel)
+    triggerand := uint32(0xffffffff &^ chancap.value)
+    selectand := uint32(0xffffffff &^ chansel.value)
     b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
-    respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap)
+    respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
     respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
     respchanselect := trenztarget.RMWbits(ctrlregCtrl, selectand, uint32(0))
     trenztarget.Dispatch()
@@ -533,7 +533,7 @@ func BenchmarkMultiReadTrenz(b *testing.B) {
 	for n := 0; n < b.N; n++ {
         // Read 2048 words then trigger again
 		respchan := trenztarget.Read(fifo, 2048)
-        respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap)
+        respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
         respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
 		trenztarget.Dispatch()
         ntrans := 0
@@ -572,7 +572,7 @@ func BenchmarkMultiReadBTrenz(b *testing.B) {
     if !ok {
         b.Fatal("Failed to find reg `timing.csr.ctrl` in trenz register map.")
     }
-    chancap, ok := timingCsrCtrl.Masks["chan_cap"]
+    chancap, ok := timingCsrCtrl.msks["chan_cap"]
     if !ok {
         b.Fatal("Failed to find mask `chan_cap` in `timing.csr.ctrl` register.")
     }
@@ -580,16 +580,16 @@ func BenchmarkMultiReadBTrenz(b *testing.B) {
     if !ok {
         b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
     }
-    chansel, ok := ctrlregCtrl.Masks["chan"]
+    chansel, ok := ctrlregCtrl.msks["chan"]
     if !ok {
         b.Fatal("Failed to find mask `chan` in `ctrl_reg.ctrl` register.")
     }
 
     // Do first trigger and select channel 0
-    triggerand := uint32(0xffffffff &^ chancap)
-    selectand := uint32(0xffffffff &^ chansel)
+    triggerand := uint32(0xffffffff &^ chancap.value)
+    selectand := uint32(0xffffffff &^ chansel.value)
     b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
-    respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap)
+    respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
     respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
     respchanselect := trenztarget.RMWbits(ctrlregCtrl, selectand, uint32(0))
     trenztarget.Dispatch()
@@ -610,7 +610,7 @@ func BenchmarkMultiReadBTrenz(b *testing.B) {
 	for n := 0; n < b.N; n++ {
         // Read 2048 words then trigger again
 		respchan := trenztarget.ReadB(fifo, 2048)
-        respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap)
+        respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
         respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
 		trenztarget.Dispatch()
         ntrans := 0
@@ -638,7 +638,7 @@ func BenchmarkSingleWrite(b *testing.B) {
 	if *nodummy {
 		b.Skip()
 	}
-	testreg := Register{"REG", uint32(0x1), make(map[string]uint32), false, 1}
+	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	outdata := []uint32{0xdeadbeef}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -657,7 +657,7 @@ func BenchmarkBlockRead(b *testing.B) {
 		b.Skip()
 	}
 
-	testreg := Register{"MEM", uint32(0x100000), make(map[string]uint32), false, 262144}
+	testreg := Register{"MEM", uint32(0x100000), make([]string, 0), false, 262144, make(map[string]msk)}
 	nword := 1000
 	b.Logf("Writing %d bytes.", nword * 4 * b.N)
 	b.ResetTimer()
@@ -680,7 +680,7 @@ func BenchmarkBlockWrite(b *testing.B) {
 		b.Skip()
 	}
 
-	testreg := Register{"MEM", uint32(0x100000), make(map[string]uint32), false, 262144}
+	testreg := Register{"MEM", uint32(0x100000), make([]string, 0), false, 262144, make(map[string]msk)}
 	nword := 1000
 	outdata := make([]uint32, nword)
 	for i := 0; i < nword; i++ {
