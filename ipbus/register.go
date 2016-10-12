@@ -32,17 +32,11 @@ type Register struct {
 }
 
 func (r Register) MaskedValue(mask string, value uint32) (uint32, error) {
-	m, ok := r.Masks[mask]
+	m, ok := r.msks[mask]
 	if !ok {
 		return uint32(0), fmt.Errorf("MaskedValue: mask '%s' not found", mask)
 	}
-	shift := uint(0)
-	for (0x1 << shift) & m == 0 {
-		shift++
-	}
-	value &= m
-	value = value >> shift
-	return value, nil
+	return (value & m.value) >> m.shift, nil
 }
 
 func (r Register) String() string {
