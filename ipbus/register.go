@@ -31,13 +31,6 @@ type Register struct {
 	msks  map[string]msk
 }
 
-func (r Register) MaskedValue(mask string, value uint32) (uint32, error) {
-	m, ok := r.msks[mask]
-	if !ok {
-		return uint32(0), fmt.Errorf("MaskedValue: mask '%s' not found", mask)
-	}
-	return (value & m.value) >> m.shift, nil
-}
 
 func (r Register) String() string {
 	s := fmt.Sprintf("%s at 0x%x", r.Name, r.Addr)
