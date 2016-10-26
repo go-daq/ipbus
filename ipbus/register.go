@@ -41,11 +41,11 @@ func (r Register) String() string {
 		s += " ["
 	}
 	i := 0
-	for n, m := range r.Masks {
+	for n, m := range r.msks {
 		if i > 0 {
 			s += ", "
 		}
-		s += fmt.Sprintf("%s:0x%x", n, m)
+		s += fmt.Sprintf("%s:0x%x", n, m.value)
 		i += 1
 	}
 	if i > 0 {
