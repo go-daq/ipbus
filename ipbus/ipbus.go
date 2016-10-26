@@ -10,7 +10,7 @@ import (
 const IPbusVersion = 2.0
 const PackageVersion = 0.0 // Not yet an actual version
 const protocolversion = uint32(2)
-var defaultorder = binary.BigEndian
+var defaultorder = binary.LittleEndian
 var verbose = false
 
 // Maxiumum Ethernet packet size (bytes)
@@ -27,7 +27,7 @@ const BusReadTimeout InfoCode = 0x6
 const busWriteTimeout InfoCode = 0x7
 const Request InfoCode = 0xf
 
-var transactionerrs = []string{"Success", "Bad Header", "Bus Read Error", "Bus Write Error", "Bus Read Timeout", "bus Write Timeout"}
+var transactionerrs = []string{"Success", "Bad Header", "Rsvd (0x2)", "Rsvd (0x3)", "Bus Read Error", "Bus Write Error", "Bus Read Timeout", "bus Write Timeout", "Rsvd (0x8)", "Rsvd (0x9)", "Rsvd (0xa)", "Rsvd (0xb)", "Rsvd (0xc)", "Rsvd (0xd)", "Rsvd (0xe)", "Request"}
 
 // Transaction types
 type typeID uint8
