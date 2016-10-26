@@ -185,7 +185,7 @@ func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
 					}
 					masks := make([]string, 0, 8)
 					msks := make(map[string]msk)
-					noninc := currentblock.mode == "port"
+					noninc := mode == "port"
 					currentreg = Register{name, baseaddr + localaddr, masks, noninc, 1, msks}
 				case regtype == "mask":
 					names := strings.Split(name, ".")
