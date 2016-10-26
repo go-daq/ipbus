@@ -3,6 +3,7 @@ package ipbus
 import (
 	"fmt"
 	"net"
+    "sort"
 	"time"
 )
 
@@ -49,6 +50,19 @@ func New(name, fn string, conn net.Conn) (Target, error) {
 		go t.hw.Run()
 		err := t.parseregfile(fn, "", uint32(0))
 	return t, err
+}
+
+func (t Target) String() string {
+    msg := fmt.Sprintf("Target at %v:\n", t.hw.raddr)
+    regnames := []string{}
+    for name, _ := range t.Regs {
+        regnames = append(regnames, name)
+    }
+    sort.Strings(regnames)
+    for _, regname := range regnames {
+        msg += fmt.Sprintf("  %v\n", t.Regs[regname])
+    }
+    return msg
 }
 
 /*
