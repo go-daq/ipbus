@@ -71,11 +71,17 @@ func (p *packet) parse(data []byte) error {
 		data = data[4:]
 		for len(data) > 0 {
 			transheader, err := newTransactionHeader(data, packheader.order)
+            tid := int(transheader.id)
+            if tid >= len(p.transactions) {
+                fmt.Printf("Found wrong transaction ID = %d. Only %d transactions.", tid, len(p.transactions))
+                fmt.Printf("p = %v\n")
+                panic(fmt.Errorf("Invalid transaction ID."))
+            }
 			trans := p.transactions[transheader.id]
-			data = data[4:]
 			resp := Response{err, transheader.code, nil, nil}
 			if err == nil { // heard successfully parsed
 				if transheader.code == Success {
+                    data = data[4:]
 					switch {
 					case transheader.tid == read || transheader.tid == readnoninc:
 						if trans.byteslice {
@@ -102,11 +108,13 @@ func (p *packet) parse(data []byte) error {
 						data = data[4:]
 					}
 				} else { // info code is not success
-					fmt.Printf("Received a transaction info code: %v\n", transheader.code)
+					fmt.Printf("Received a transaction info code: %v\n%v\n", transheader.code, p)
+                    fmt.Printf("Transaction response = 0x%x\n", data)
 					resp.Err = fmt.Errorf("IPbus error: %s", transactionerrs[transheader.code])
 					// What do I do if there was an error, stop parsing now?
 					// Does it continue with replies to following transactions?
 					// Need to check IPbus docs.
+                    data = data[4:]
 				}
 			}
 			p.replies = append(p.replies, resp)
