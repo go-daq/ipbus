@@ -275,3 +275,19 @@ func (t Target) MaskedWrite(reg Register, mask string, value uint32) (chan Respo
 	resp := t.RMWbits(reg, andterm, orterm)
 	return resp, nil
 }
+
+// Immediately send a write command and return any error once all return packets are received
+func (t Target) WriteNow(reg Register, data []uint32) (error) {
+    return fmt.Errorf("Not yet implemented")
+
+}
+
+// Immediately send read command and return all read words once all return packets are recieved
+func (t Target) ReadNow(reg Register, nword uint) ([]uint32, error) {
+    return []uint32{}, fmt.Errorf("Not yet implemented")
+}
+
+// Immediately perform a masked write on a register and return the previous value once return packet is received
+func (t Target) MaskedWriteNow(reg Register, mask string, value uint32) (uint32, error) {
+    return uint32(0), fmt.Errorf("Not yet implemented")
+}
