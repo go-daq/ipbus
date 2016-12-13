@@ -71,17 +71,17 @@ func (p *packet) parse(data []byte) error {
 		data = data[4:]
 		for len(data) > 0 {
 			transheader, err := newTransactionHeader(data, packheader.order)
-            tid := int(transheader.id)
-            if tid >= len(p.transactions) {
-                fmt.Printf("Found wrong transaction ID = %d. Only %d transactions.", tid, len(p.transactions))
-                fmt.Printf("p = %v\n")
-                panic(fmt.Errorf("Invalid transaction ID."))
-            }
+			tid := int(transheader.id)
+			if tid >= len(p.transactions) {
+				fmt.Printf("Found wrong transaction ID = %d. Only %d transactions.", tid, len(p.transactions))
+				fmt.Printf("p = %v\n")
+				panic(fmt.Errorf("Invalid transaction ID."))
+			}
 			trans := p.transactions[transheader.id]
 			resp := Response{err, transheader.code, nil, nil}
 			if err == nil { // heard successfully parsed
 				if transheader.code == Success {
-                    data = data[4:]
+					data = data[4:]
 					switch {
 					case transheader.tid == read || transheader.tid == readnoninc:
 						if trans.byteslice {
@@ -90,7 +90,7 @@ func (p *packet) parse(data []byte) error {
 							resp.Data = bytes2uint32s(data[:int(transheader.words)*4], packheader.order)
 						}
 						if verbose {
-							fmt.Printf("Skipping %d words, %d bytes.\n", transheader.words, 4 * int(transheader.words))
+							fmt.Printf("Skipping %d words, %d bytes.\n", transheader.words, 4*int(transheader.words))
 						}
 						data = data[int(transheader.words)*4:]
 					case transheader.tid == write || transheader.tid == writenoninc:
@@ -109,12 +109,12 @@ func (p *packet) parse(data []byte) error {
 					}
 				} else { // info code is not success
 					fmt.Printf("Received a transaction info code: %v\n%v\n", transheader.code, p)
-                    fmt.Printf("Transaction response = 0x%x\n", data)
+					fmt.Printf("Transaction response = 0x%x\n", data)
 					resp.Err = fmt.Errorf("IPbus error: %s", transactionerrs[transheader.code])
 					// What do I do if there was an error, stop parsing now?
 					// Does it continue with replies to following transactions?
 					// Need to check IPbus docs.
-                    data = data[4:]
+					data = data[4:]
 				}
 			}
 			p.replies = append(p.replies, resp)
@@ -179,7 +179,7 @@ func emptypacket(pt packetType) *packet {
 	// header is 8 bytes. This leaves 368 words for the ipbus data.
 	size := (MaxPacketSize - 28) / 4
 	header := packetheader{uint8(protocolversion), uint16(0),
-			  pt, defaultorder}
+		pt, defaultorder}
 	return &packet{header, 0, trans, replies, size, size, 1, 1, request, time.Time{}} // For normal packet
 }
 
@@ -202,7 +202,7 @@ func (p *packet) add(trans transaction) error {
 		if len(trans.Input) != int(trans.outheader.words) {
 			return fmt.Errorf("Write/WriteNonInc transaction with NWords = %d, but %d words of input data", trans.outheader.words, len(trans.Input))
 		}
-		if reqspace < uint(trans.outheader.words) + 2 || respspace < 1 {
+		if reqspace < uint(trans.outheader.words)+2 || respspace < 1 {
 			return fmt.Errorf("Add %d word Write[NonInc]: insufficient space in packet.", trans.outheader.words)
 		}
 		p.reqlen += uint(trans.outheader.words) + 2
@@ -239,13 +239,13 @@ func (p *packet) add(trans transaction) error {
 	if verbose {
 		fmt.Printf("Added transaction header (%x): p.request = %x\n", transhead, p.request)
 	}
-	data := make([]byte, 4*len(trans.Input) + 4)
+	data := make([]byte, 4*len(trans.Input)+4)
 	if verbose {
 		fmt.Printf("data [%d, %d] = %v\n", len(data), cap(data), data)
 	}
 	p.header.order.PutUint32(data, trans.Addr)
 	for i, val := range trans.Input {
-		buffer := data[(i + 1) * 4:]
+		buffer := data[(i+1)*4:]
 		//fmt.Printf("Putting 0x%x into %v\n", val, buffer)
 		//fmt.Printf("1: header order = %v\n", p.header.order)
 		p.header.order.PutUint32(buffer, val)

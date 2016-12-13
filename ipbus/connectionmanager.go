@@ -55,10 +55,10 @@ func (cm CM) Target(name string) (Target, error) {
 	if dest == "" {
 		return Target{}, fmt.Errorf("Connection '%s' not found.", name)
 	}
-    raddr, err := net.ResolveUDPAddr("udp4", dest)
-    if err != nil {
-        return Target{}, err
-    }
+	raddr, err := net.ResolveUDPAddr("udp4", dest)
+	if err != nil {
+		return Target{}, err
+	}
 	conn, err := net.DialUDP("udp", nil, raddr)
 	if err != nil {
 		panic(err)

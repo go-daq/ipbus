@@ -7,12 +7,13 @@ import (
 	"net"
 	"os"
 	"os/exec"
-    "sort"
+	"sort"
 	"testing"
 	"time"
 )
 
 const failunwritten = false
+
 var dummy *dummyHardware
 var dt = 60 * time.Second
 var log *os.File
@@ -22,11 +23,10 @@ var trenztarget *Target
 var trenz *bool
 var ipbusverbose *bool
 
-
 func TestMain(m *testing.M) {
 	ipbusverbose = flag.Bool("ipbusverbose", false, "Turn on verbosity of ipbus package")
 	nodummy = flag.Bool("nodummyhardware", false, "Skip tests requiring dummy hardware.")
-    trenz = flag.Bool("trenzhardware", false, "Enable tests against Trenz board.")
+	trenz = flag.Bool("trenzhardware", false, "Enable tests against Trenz board.")
 	flag.Parse()
 	verbose = *ipbusverbose
 	verbose = *ipbusverbose
@@ -38,12 +38,12 @@ func TestMain(m *testing.M) {
 	if testing.Verbose() {
 		fmt.Printf("Target regs: %v\n", target.Regs)
 	}
-    if *trenz {
-        starttrenz()
-    }
+	if *trenz {
+		starttrenz()
+	}
 	code := m.Run()
 	if !*nodummy {
-		dummy.Kill <-true
+		dummy.Kill <- true
 	}
 	time.Sleep(time.Second)
 	os.Exit(code)
@@ -51,10 +51,10 @@ func TestMain(m *testing.M) {
 
 func starttrenz() {
 	if trenztarget == nil {
-        raddr, err := net.ResolveUDPAddr("udp4", "192.168.235.0:50001")
-        if err != nil {
-            panic(err)
-        }
+		raddr, err := net.ResolveUDPAddr("udp4", "192.168.235.0:50001")
+		if err != nil {
+			panic(err)
+		}
 		conn, err := net.DialUDP("udp4", nil, raddr)
 		if err != nil {
 			panic(err)
@@ -64,15 +64,15 @@ func starttrenz() {
 			panic(err)
 		}
 		trenztarget = &t
-        fmt.Printf("Trenz board with registers:\n")
-        regnames := make([]string, 0, len(trenztarget.Regs))
-        for k := range trenztarget.Regs {
-            regnames = append(regnames, k)
-        }
-        sort.Strings(regnames)
-        for _, regname := range regnames {
-            fmt.Printf("\t%v\n", trenztarget.Regs[regname])
-        }
+		fmt.Printf("Trenz board with registers:\n")
+		regnames := make([]string, 0, len(trenztarget.Regs))
+		for k := range trenztarget.Regs {
+			regnames = append(regnames, k)
+		}
+		sort.Strings(regnames)
+		for _, regname := range regnames {
+			fmt.Printf("\t%v\n", trenztarget.Regs[regname])
+		}
 		if *ipbusverbose {
 			trenztarget.hw.nverbose = 1
 		}
@@ -98,10 +98,10 @@ func startdummy() {
 
 func starttarget() {
 	if target == nil {
-        raddr, err := net.ResolveUDPAddr("udp4", "localhost:60001")
-        if err != nil {
-            panic(err)
-        }
+		raddr, err := net.ResolveUDPAddr("udp4", "localhost:60001")
+		if err != nil {
+			panic(err)
+		}
 		conn, err := net.DialUDP("udp4", nil, raddr)
 		if err != nil {
 			panic(err)
@@ -142,10 +142,10 @@ func TestSingleReadWrite(t *testing.T) {
 	}
 	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	/*
-	testreg, ok := target.Regs["REG"]
-	if !ok {
-		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
-	}
+		testreg, ok := target.Regs["REG"]
+		if !ok {
+			t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
+		}
 	*/
 	testval := uint32(0xdeadbeef)
 	t.Logf("Writing single vale 0x%x to test register.", testval)
@@ -177,10 +177,10 @@ func TestRMWbits(t *testing.T) {
 	}
 	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	/*
-	testreg, ok := target.Regs["REG"]
-	if !ok {
-		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
-	}
+		testreg, ok := target.Regs["REG"]
+		if !ok {
+			t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
+		}
 	*/
 	testval := uint32(0xdeadbeef)
 	andterm := uint32(0x0f0f0f0f)
@@ -225,10 +225,10 @@ func TestRMWsum(t *testing.T) {
 	}
 	testreg := Register{"REG", uint32(0x1), make([]string, 0), false, 1, make(map[string]msk)}
 	/*
-	testreg, ok := target.Regs["REG"]
-	if !ok {
-		t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
-	}
+		testreg, ok := target.Regs["REG"]
+		if !ok {
+			t.Fatalf("Couldn't find test register 'REG' in dummy device description.")
+		}
 	*/
 	testval := uint32(0xdeadbeef)
 	addend := uint32(0x0f0f0f0f)
@@ -266,7 +266,6 @@ func TestRMWsum(t *testing.T) {
 	t.Logf("After RMWsum read word 0x%x", value)
 }
 
-
 // Test block read and block write.
 func TestBlockReadWriteInc(t *testing.T) {
 	if *nodummy {
@@ -276,7 +275,7 @@ func TestBlockReadWriteInc(t *testing.T) {
 	testreg := Register{"MEM", uint32(0x100000), make([]string, 0), false, 268435456, make(map[string]msk)}
 	//testreg, ok := target.Regs["MEM"]
 	//if !ok {
-		//t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
+	//t.Fatalf("Couldn't find test register 'MEM' in dummy device description.")
 	//}
 	nvals := 1000
 	outdata := make([]uint32, nvals)
@@ -289,28 +288,28 @@ func TestBlockReadWriteInc(t *testing.T) {
 	respchan := target.Write(testreg, outdata)
 	target.Dispatch()
 	ntrans := 0
-    wordspertrans := make([]int, 0, 8)
+	wordspertrans := make([]int, 0, 8)
 	for resp := range respchan {
 		if resp.Err != nil {
 			t.Fatal(resp.Err)
 		}
 		ntrans++
-        wordspertrans = append(wordspertrans, len(resp.Data))
+		wordspertrans = append(wordspertrans, len(resp.Data))
 	}
 	t.Logf("Send data in %d transactions: %v.", ntrans, wordspertrans)
 
 	t.Logf("Reading %d words from test register.", nvals)
 	respchan = target.Read(testreg, uint(nvals))
 	target.Dispatch()
-    ntrans = 0
-    wordspertrans = make([]int, 0, 8)
+	ntrans = 0
+	wordspertrans = make([]int, 0, 8)
 	for resp := range respchan {
 		if resp.Err != nil {
 			t.Fatal(resp.Err)
 		}
 		indata = append(indata, resp.Data...)
 		ntrans++
-        wordspertrans = append(wordspertrans, len(resp.Data))
+		wordspertrans = append(wordspertrans, len(resp.Data))
 	}
 	t.Logf("Received data in %d transactions: %v.", ntrans, wordspertrans)
 
@@ -371,7 +370,7 @@ func TestBlockReadWriteNonInc(t *testing.T) {
 	if len(indata) == nvals {
 		nwrong := 0
 		for i := 0; i < nvals; i++ {
-			if indata[i] != outdata[nvals - 1] {
+			if indata[i] != outdata[nvals-1] {
 				if nwrong < 3 {
 					t.Errorf("indata[%d] = 0x%x, expected 0x%x", i, indata[i], outdata[i])
 				} else {
@@ -385,31 +384,32 @@ func TestBlockReadWriteNonInc(t *testing.T) {
 		t.Errorf("Expected %d values, received %v", nvals, len(indata))
 	}
 }
+
 // Test that the library returns correct errors when going against target's permissions.
 func TestPermissions(t *testing.T) {
 	if *nodummy {
 		t.Skip()
 	}
 	/*
-	cm, err := NewCM("xml/dummy_connections.xml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := cm.Target("dummy.udp2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeonlyreg, ok := target.Regs["REG_WRITE_ONLY"]
-	if !ok {
-		t.Fatalf("Failed to find `REG_WRITE_ONLY` register.")
-	}
-	readonlyreg, ok := target.Regs["REG_READ_ONLY"]
-	if !ok {
-		t.Fatalf("Failed to find `REG_READ_ONLY` register.")
-	}
-	t.Logf("Read-only: %v, write-only: %v\n", readonlyreg, writeonlyreg)
+		cm, err := NewCM("xml/dummy_connections.xml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		target, err := cm.Target("dummy.udp2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeonlyreg, ok := target.Regs["REG_WRITE_ONLY"]
+		if !ok {
+			t.Fatalf("Failed to find `REG_WRITE_ONLY` register.")
+		}
+		readonlyreg, ok := target.Regs["REG_READ_ONLY"]
+		if !ok {
+			t.Fatalf("Failed to find `REG_READ_ONLY` register.")
+		}
+		t.Logf("Read-only: %v, write-only: %v\n", readonlyreg, writeonlyreg)
 
-	t.Log("Tring to read from a write-only regiser.")
+		t.Log("Tring to read from a write-only regiser.")
 	*/
 	/*
 		respchan := target.Read(writeonlyreg, 1)
@@ -454,21 +454,21 @@ func BenchmarkSingleRead(b *testing.B) {
 
 // Bench mark single word read.
 func BenchmarkSingleReadTrenz(b *testing.B) {
-	if ! *trenz {
-        b.Log("Skipping benchmark against Trenz board.")
+	if !*trenz {
+		b.Log("Skipping benchmark against Trenz board.")
 		b.Skip()
 	}
 	testreg, ok := trenztarget.Regs["ctrl_reg.ctrl"]
-    if !ok {
-        b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
-    }
-    b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
-    respchan := trenztarget.Read(testreg, 1)
-    trenztarget.Dispatch()
-    resp := <-respchan
-    if resp.Err != nil {
-        b.Fatal(resp.Err)
-    }
+	if !ok {
+		b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
+	}
+	b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
+	respchan := trenztarget.Read(testreg, 1)
+	trenztarget.Dispatch()
+	resp := <-respchan
+	if resp.Err != nil {
+		b.Fatal(resp.Err)
+	}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		respchan := trenztarget.Read(testreg, 1)
@@ -482,75 +482,75 @@ func BenchmarkSingleReadTrenz(b *testing.B) {
 
 // Bench mark single word read.
 func BenchmarkMultiReadTrenz(b *testing.B) {
-	if ! *trenz {
-        b.Log("Skipping benchmark against Trenz board.")
+	if !*trenz {
+		b.Log("Skipping benchmark against Trenz board.")
 		b.Skip()
 	}
-    // Organise registers and masks
-	fifo , ok := trenztarget.Regs["chan.fifo"]
-    if !ok {
-        b.Fatal("Failed to find reg `chan.fifo` in trenz register map.")
-    }
-    timingCsrCtrl, ok := trenztarget.Regs["timing.csr.ctrl"]
-    if !ok {
-        b.Fatal("Failed to find reg `timing.csr.ctrl` in trenz register map.")
-    }
-    chancap, ok := timingCsrCtrl.msks["chan_cap"]
-    if !ok {
-        b.Fatal("Failed to find mask `chan_cap` in `timing.csr.ctrl` register.")
-    }
-    ctrlregCtrl, ok := trenztarget.Regs["ctrl_reg.ctrl"]
-    if !ok {
-        b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
-    }
+	// Organise registers and masks
+	fifo, ok := trenztarget.Regs["chan.fifo"]
+	if !ok {
+		b.Fatal("Failed to find reg `chan.fifo` in trenz register map.")
+	}
+	timingCsrCtrl, ok := trenztarget.Regs["timing.csr.ctrl"]
+	if !ok {
+		b.Fatal("Failed to find reg `timing.csr.ctrl` in trenz register map.")
+	}
+	chancap, ok := timingCsrCtrl.msks["chan_cap"]
+	if !ok {
+		b.Fatal("Failed to find mask `chan_cap` in `timing.csr.ctrl` register.")
+	}
+	ctrlregCtrl, ok := trenztarget.Regs["ctrl_reg.ctrl"]
+	if !ok {
+		b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
+	}
 	chansel, ok := ctrlregCtrl.msks["chan"]
-    if !ok {
-        b.Fatal("Failed to find mask `chan` in `ctrl_reg.ctrl` register.")
-    }
+	if !ok {
+		b.Fatal("Failed to find mask `chan` in `ctrl_reg.ctrl` register.")
+	}
 
-    // Do first trigger and select channel 0
-    triggerand := uint32(0xffffffff &^ chancap.value)
-    selectand := uint32(0xffffffff &^ chansel.value)
-    b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
-    respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
-    respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
-    respchanselect := trenztarget.RMWbits(ctrlregCtrl, selectand, uint32(0))
-    trenztarget.Dispatch()
-    resp := <-respchantrig1
-    if resp.Err != nil {
-        b.Fatal(resp.Err)
-    }
-    resp = <-respchantrig0
-    if resp.Err != nil {
-        b.Fatal(resp.Err)
-    }
-    resp = <-respchanselect
-    if resp.Err != nil {
-        b.Fatal(resp.Err)
-    }
-    b.Logf("First trigger and selected channel 0.")
+	// Do first trigger and select channel 0
+	triggerand := uint32(0xffffffff &^ chancap.value)
+	selectand := uint32(0xffffffff &^ chansel.value)
+	b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
+	respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
+	respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
+	respchanselect := trenztarget.RMWbits(ctrlregCtrl, selectand, uint32(0))
+	trenztarget.Dispatch()
+	resp := <-respchantrig1
+	if resp.Err != nil {
+		b.Fatal(resp.Err)
+	}
+	resp = <-respchantrig0
+	if resp.Err != nil {
+		b.Fatal(resp.Err)
+	}
+	resp = <-respchanselect
+	if resp.Err != nil {
+		b.Fatal(resp.Err)
+	}
+	b.Logf("First trigger and selected channel 0.")
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-        // Read 2048 words then trigger again
+		// Read 2048 words then trigger again
 		respchan := trenztarget.Read(fifo, 2048)
-        respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
-        respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
+		respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
+		respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
 		trenztarget.Dispatch()
-        ntrans := 0
-        nword := 0
+		ntrans := 0
+		nword := 0
 		for resp := range respchan {
-            if resp.Err != nil {
-                b.Fatal(resp.Err)
-            }
-            ntrans += 1
-            nword += len(resp.Data)
-        }
-        //b.Logf("Received %d words in %d transactions.", nword, ntrans)
-        resp = <-respchantrig1
+			if resp.Err != nil {
+				b.Fatal(resp.Err)
+			}
+			ntrans += 1
+			nword += len(resp.Data)
+		}
+		//b.Logf("Received %d words in %d transactions.", nword, ntrans)
+		resp = <-respchantrig1
 		if resp.Err != nil {
 			b.Fatal(resp.Err)
 		}
-        resp = <-respchantrig0
+		resp = <-respchantrig0
 		if resp.Err != nil {
 			b.Fatal(resp.Err)
 		}
@@ -559,80 +559,81 @@ func BenchmarkMultiReadTrenz(b *testing.B) {
 
 // Bench mark single word read.
 func BenchmarkMultiReadBTrenz(b *testing.B) {
-	if ! *trenz {
-        b.Log("Skipping benchmark against Trenz board.")
+	if !*trenz {
+		b.Log("Skipping benchmark against Trenz board.")
 		b.Skip()
 	}
-    // Organise registers and masks
-	fifo , ok := trenztarget.Regs["chan.fifo"]
-    if !ok {
-        b.Fatal("Failed to find reg `chan.fifo` in trenz register map.")
-    }
-    timingCsrCtrl, ok := trenztarget.Regs["timing.csr.ctrl"]
-    if !ok {
-        b.Fatal("Failed to find reg `timing.csr.ctrl` in trenz register map.")
-    }
-    chancap, ok := timingCsrCtrl.msks["chan_cap"]
-    if !ok {
-        b.Fatal("Failed to find mask `chan_cap` in `timing.csr.ctrl` register.")
-    }
-    ctrlregCtrl, ok := trenztarget.Regs["ctrl_reg.ctrl"]
-    if !ok {
-        b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
-    }
-    chansel, ok := ctrlregCtrl.msks["chan"]
-    if !ok {
-        b.Fatal("Failed to find mask `chan` in `ctrl_reg.ctrl` register.")
-    }
+	// Organise registers and masks
+	fifo, ok := trenztarget.Regs["chan.fifo"]
+	if !ok {
+		b.Fatal("Failed to find reg `chan.fifo` in trenz register map.")
+	}
+	timingCsrCtrl, ok := trenztarget.Regs["timing.csr.ctrl"]
+	if !ok {
+		b.Fatal("Failed to find reg `timing.csr.ctrl` in trenz register map.")
+	}
+	chancap, ok := timingCsrCtrl.msks["chan_cap"]
+	if !ok {
+		b.Fatal("Failed to find mask `chan_cap` in `timing.csr.ctrl` register.")
+	}
+	ctrlregCtrl, ok := trenztarget.Regs["ctrl_reg.ctrl"]
+	if !ok {
+		b.Fatal("Failed to find reg `ctrl_reg.ctrl` in trenz register map.")
+	}
+	chansel, ok := ctrlregCtrl.msks["chan"]
+	if !ok {
+		b.Fatal("Failed to find mask `chan` in `ctrl_reg.ctrl` register.")
+	}
 
-    // Do first trigger and select channel 0
-    triggerand := uint32(0xffffffff &^ chancap.value)
-    selectand := uint32(0xffffffff &^ chansel.value)
-    b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
-    respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
-    respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
-    respchanselect := trenztarget.RMWbits(ctrlregCtrl, selectand, uint32(0))
-    trenztarget.Dispatch()
-    resp := <-respchantrig1
-    if resp.Err != nil {
-        b.Fatal(resp.Err)
-    }
-    resp = <-respchantrig0
-    if resp.Err != nil {
-        b.Fatal(resp.Err)
-    }
-    resp = <-respchanselect
-    if resp.Err != nil {
-        b.Fatal(resp.Err)
-    }
-    b.Logf("First trigger and selected channel 0.")
+	// Do first trigger and select channel 0
+	triggerand := uint32(0xffffffff &^ chancap.value)
+	selectand := uint32(0xffffffff &^ chansel.value)
+	b.Log("Running test reading ctrl_reg.ctrl from Trenz board.")
+	respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
+	respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
+	respchanselect := trenztarget.RMWbits(ctrlregCtrl, selectand, uint32(0))
+	trenztarget.Dispatch()
+	resp := <-respchantrig1
+	if resp.Err != nil {
+		b.Fatal(resp.Err)
+	}
+	resp = <-respchantrig0
+	if resp.Err != nil {
+		b.Fatal(resp.Err)
+	}
+	resp = <-respchanselect
+	if resp.Err != nil {
+		b.Fatal(resp.Err)
+	}
+	b.Logf("First trigger and selected channel 0.")
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-        // Read 2048 words then trigger again
+		// Read 2048 words then trigger again
 		respchan := trenztarget.ReadB(fifo, 2048)
-        respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
-        respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
+		respchantrig1 := trenztarget.RMWbits(timingCsrCtrl, triggerand, chancap.value)
+		respchantrig0 := trenztarget.RMWbits(timingCsrCtrl, triggerand, uint32(0))
 		trenztarget.Dispatch()
-        ntrans := 0
-        nword := 0
+		ntrans := 0
+		nword := 0
 		for resp := range respchan {
-            if resp.Err != nil {
-                b.Fatal(resp.Err)
-            }
-            ntrans += 1
-            nword += len(resp.DataB)
-        }
-        //b.Logf("Received %d words in %d transactions.", nword, ntrans)
-        resp = <-respchantrig1
+			if resp.Err != nil {
+				b.Fatal(resp.Err)
+			}
+			ntrans += 1
+			nword += len(resp.DataB)
+		}
+		//b.Logf("Received %d words in %d transactions.", nword, ntrans)
+		resp = <-respchantrig1
 		if resp.Err != nil {
 			b.Fatal(resp.Err)
 		}
-        resp = <-respchantrig0
+		resp = <-respchantrig0
 		if resp.Err != nil {
 			b.Fatal(resp.Err)
 		}
 	}
 }
+
 // Bench mark single word write.
 func BenchmarkSingleWrite(b *testing.B) {
 	if *nodummy {
@@ -659,7 +660,7 @@ func BenchmarkBlockRead(b *testing.B) {
 
 	testreg := Register{"MEM", uint32(0x100000), make([]string, 0), false, 262144, make(map[string]msk)}
 	nword := 1000
-	b.Logf("Writing %d bytes.", nword * 4 * b.N)
+	b.Logf("Writing %d bytes.", nword*4*b.N)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		respchan := target.Read(testreg, 1)
@@ -686,7 +687,7 @@ func BenchmarkBlockWrite(b *testing.B) {
 	for i := 0; i < nword; i++ {
 		outdata[i] = uint32(i)
 	}
-	b.Logf("Writing %d bytes.", nword * 4 * b.N)
+	b.Logf("Writing %d bytes.", nword*4*b.N)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		respchan := target.Write(testreg, outdata)

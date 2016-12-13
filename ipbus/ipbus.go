@@ -10,6 +10,7 @@ import (
 const IPbusVersion = 2.0
 const PackageVersion = 0.0 // Not yet an actual version
 const protocolversion = uint32(2)
+
 var defaultorder = binary.LittleEndian
 var verbose = false
 

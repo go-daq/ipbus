@@ -8,7 +8,7 @@ func newmask(name string, value uint32) msk {
 	shift := uint(0)
 	for i := uint(0); i < 32; i++ {
 		test := uint32(1) << i
-		if test & value > 0 {
+		if test&value > 0 {
 			shift = i
 			break
 		}
@@ -17,20 +17,19 @@ func newmask(name string, value uint32) msk {
 }
 
 type msk struct {
-	name string
+	name  string
 	value uint32
 	shift uint
 }
 
 type Register struct {
 	Name   string
-	Addr   uint32 // Global IPbus address
-	Masks []string // List of names bitmasks
+	Addr   uint32   // Global IPbus address
+	Masks  []string // List of names bitmasks
 	noninc bool
 	size   int
-	msks  map[string]msk
+	msks   map[string]msk
 }
-
 
 func (r Register) String() string {
 	s := fmt.Sprintf("%s at 0x%x", r.Name, r.Addr)

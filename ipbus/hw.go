@@ -28,8 +28,8 @@ var nhw = 0
 
 func newhw(conn net.Conn, dt time.Duration) *hw {
 	raddr := conn.RemoteAddr()
-	hw := hw{Num: nhw, conn: conn, raddr: raddr, waittime: dt, 
-		nextID: uint16(1), inflight: 0, maxflight: 4, 
+	hw := hw{Num: nhw, conn: conn, raddr: raddr, waittime: dt,
+		nextID: uint16(1), inflight: 0, maxflight: 4,
 		reporttime: 30 * time.Second}
 	nhw += 1
 	//hw.nverbose = 5
@@ -39,15 +39,15 @@ func newhw(conn net.Conn, dt time.Duration) *hw {
 }
 
 type hw struct {
-	Num        int
-	replies    chan hwpacket
+	Num     int
+	replies chan hwpacket
 	//errs       chan data.ErrPack // Channel to send errors to whomever cares.
-	conn       net.Conn      // UDP connection with the device.
-	raddr      net.Addr      // UDP address of the hardware device.
-	configured bool              // Flag to ensure connection is configured, etc. before
+	conn       net.Conn // UDP connection with the device.
+	raddr      net.Addr // UDP address of the hardware device.
+	configured bool     // Flag to ensure connection is configured, etc. before
 	// attempting to send data.
 	// is assumed to be lost and handled as such.
-	statuses	chan targetstatus
+	statuses          chan targetstatus
 	nextID, timeoutid uint16 // The packet ID expected next by the hardware.
 	mtu               uint32 // The Maxmimum transmission unit is not currently used,
 	// but defines the largest packet size (in bytes) to be
@@ -144,23 +144,23 @@ func (h *hw) handlelost() {
 	packetreceived := false
 	packetsent := false
 	/*
-	for _, rh := range statusreply.ReceivedHeaders {
-		if rh.ID == h.timeoutid {
-			packetreceived = true
-			fmt.Printf("    lost packet: %v!\n", rh)
-		} else {
-			fmt.Printf("    %v\n", rh)
+		for _, rh := range statusreply.ReceivedHeaders {
+			if rh.ID == h.timeoutid {
+				packetreceived = true
+				fmt.Printf("    lost packet: %v!\n", rh)
+			} else {
+				fmt.Printf("    %v\n", rh)
+			}
 		}
-	}
-	fmt.Printf("Sent headers:\n")
-	for _, sh := range statusreply.OutgoingHeaders {
-		if sh.ID == h.timeoutid {
-			packetsent = true
-			fmt.Printf("    lost packet: %v!\n", sh)
-		} else {
-			fmt.Printf("    %v\n", sh)
+		fmt.Printf("Sent headers:\n")
+		for _, sh := range statusreply.OutgoingHeaders {
+			if sh.ID == h.timeoutid {
+				packetsent = true
+				fmt.Printf("    lost packet: %v!\n", sh)
+			} else {
+				fmt.Printf("    %v\n", sh)
+			}
 		}
-	}
 	*/
 	if packetsent {
 		err := h.sendresendrequest(h.timeoutid)
@@ -307,9 +307,9 @@ func (h *hw) closeall() {
 // NB: NEED TO HANDLE STATUS REQUESTS DIFFERENTLY
 func (h *hw) Run() {
 	/*
-	if err := h.config(); err != nil {
-		panic(err)
-	}
+		if err := h.config(); err != nil {
+			panic(err)
+		}
 	*/
 	go h.ConfigDevice()
 	running := true
@@ -402,9 +402,9 @@ func (h *hw) Run() {
 				if err != nil {
 					// Handle error
 				}
-				// Status packets are used either for initial configuration 
+				// Status packets are used either for initial configuration
 				// or for deciding what to do with a lost packet
-				h.statuses <-st
+				h.statuses <- st
 			} else {
 				req, ok := h.flying[id]
 				if ok {
@@ -484,7 +484,6 @@ func (h *hw) Send(p *packet) error {
 	h.incoming <- p
 	return error(nil)
 }
-
 
 // Receive incoming packets
 func (h *hw) receive() {

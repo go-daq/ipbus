@@ -28,7 +28,7 @@ func newDummy(port int) dummyHardware {
 type dummyHardware struct {
 	cmd     *exec.Cmd
 	running bool
-	Kill chan bool
+	Kill    chan bool
 }
 
 func (d *dummyHardware) Start() error {
@@ -80,7 +80,7 @@ func (d dummyHardware) Run(dt time.Duration, log io.WriteCloser) {
 
 func (d dummyHardware) wait(errchan chan error) {
 	err := d.cmd.Wait()
-	errchan <-err
+	errchan <- err
 }
 
 func (d *dummyHardware) Stop() error {

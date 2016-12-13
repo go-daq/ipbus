@@ -3,7 +3,7 @@ package ipbus
 import (
 	"fmt"
 	"net"
-    "sort"
+	"sort"
 	"time"
 )
 
@@ -35,34 +35,34 @@ type Target struct {
 
 // Create a new target by parsing an XML file description.
 func New(name, fn string, conn net.Conn) (Target, error) {
-		regs := make(map[string]Register)
-		reqs := make(chan usrrequest)
-		fp := make(chan bool)
-		stop := make(chan bool)
-		t := Target{Name: name, Regs: regs, requests: reqs, finishpacket: fp, stop: stop}
-		t.TimeoutPeriod = DefaultTimeout
-		t.AutoDispatch = DefaultAutoDispatch
-		t.hw = newhw(conn, t.TimeoutPeriod)
-		go t.preparepackets()
-		if verbose {
-			t.hw.SetVerbose(1)
-		}
-		go t.hw.Run()
-		err := t.parseregfile(fn, "", uint32(0))
+	regs := make(map[string]Register)
+	reqs := make(chan usrrequest)
+	fp := make(chan bool)
+	stop := make(chan bool)
+	t := Target{Name: name, Regs: regs, requests: reqs, finishpacket: fp, stop: stop}
+	t.TimeoutPeriod = DefaultTimeout
+	t.AutoDispatch = DefaultAutoDispatch
+	t.hw = newhw(conn, t.TimeoutPeriod)
+	go t.preparepackets()
+	if verbose {
+		t.hw.SetVerbose(1)
+	}
+	go t.hw.Run()
+	err := t.parseregfile(fn, "", uint32(0))
 	return t, err
 }
 
 func (t Target) String() string {
-    msg := fmt.Sprintf("Target at %v:\n", t.hw.raddr)
-    regnames := []string{}
-    for name, _ := range t.Regs {
-        regnames = append(regnames, name)
-    }
-    sort.Strings(regnames)
-    for _, regname := range regnames {
-        msg += fmt.Sprintf("  %v\n", t.Regs[regname])
-    }
-    return msg
+	msg := fmt.Sprintf("Target at %v:\n", t.hw.raddr)
+	regnames := []string{}
+	for name, _ := range t.Regs {
+		regnames = append(regnames, name)
+	}
+	sort.Strings(regnames)
+	for _, regname := range regnames {
+		msg += fmt.Sprintf("  %v\n", t.Regs[regname])
+	}
+	return msg
 }
 
 /*
@@ -90,7 +90,7 @@ func (t Target) preparepackets() {
 					fmt.Printf("Dispatch request. %d packets ready.\n", len(packs))
 				}
 				for _, p := range packs {
-					t.hw.incoming <-p
+					t.hw.incoming <- p
 					//t.send(p)
 				}
 				packs = []*packet{}
@@ -135,7 +135,7 @@ func (t Target) preparepackets() {
 					nwords := uint(len(req.Input))
 					index := uint(0)
 					for nwords > 0 {
-                        reqspace, respspace = p.space()
+						reqspace, respspace = p.space()
 						if reqspace < 3 || respspace < 1 {
 							packs = append(packs, emptypacket(control))
 							p = packs[len(packs)-1]
@@ -156,8 +156,8 @@ func (t Target) preparepackets() {
 							req.Input[index:index+ntowrite],
 							req.resp, req.byteslice, final)
 						if err := p.add(t); err != nil {
-                            panic(err)
-                        }
+							panic(err)
+						}
 						if req.typeid == write {
 							req.addr += uint32(ntowrite)
 
@@ -277,41 +277,41 @@ func (t Target) MaskedWrite(reg Register, mask string, value uint32) (chan Respo
 }
 
 // Immediately send a write command and return any error once all return packets are received
-func (t Target) WriteNow(reg Register, data []uint32) (error) {
-    rc := t.Write(reg, data)
-    t.Dispatch()
-    for r := range rc {
-        if r.Err != nil {
-            return r.Err
-        }
-    }
-    return nil
+func (t Target) WriteNow(reg Register, data []uint32) error {
+	rc := t.Write(reg, data)
+	t.Dispatch()
+	for r := range rc {
+		if r.Err != nil {
+			return r.Err
+		}
+	}
+	return nil
 }
 
 // Immediately send read command and return all read words once all return packets are recieved
 func (t Target) ReadNow(reg Register, nword uint) ([]uint32, error) {
-    rc := t.Read(reg, nword)
-    t.Dispatch()
-    data := make([]uint32, 0, int(nword))
-    for r := range rc {
-        data = append(data, r.Data...)
-        if r.Err != nil {
-            return data, r.Err
-        }
-    }
-    return data, nil
+	rc := t.Read(reg, nword)
+	t.Dispatch()
+	data := make([]uint32, 0, int(nword))
+	for r := range rc {
+		data = append(data, r.Data...)
+		if r.Err != nil {
+			return data, r.Err
+		}
+	}
+	return data, nil
 }
 
 // Immediately perform a masked write on a register and return the previous value once return packet is received
 func (t Target) MaskedWriteNow(reg Register, mask string, value uint32) (uint32, error) {
-    rc, err := t.MaskedWrite(reg, mask, value)
-    if err != nil {
-        return uint32(0), err
-    }
-    t.Dispatch()
-    r := <-rc
-    if r.Err != nil {
-        return uint32(0), r.Err
-    }
-    return r.Data[0], nil
+	rc, err := t.MaskedWrite(reg, mask, value)
+	if err != nil {
+		return uint32(0), err
+	}
+	t.Dispatch()
+	r := <-rc
+	if r.Err != nil {
+		return uint32(0), r.Err
+	}
+	return r.Data[0], nil
 }

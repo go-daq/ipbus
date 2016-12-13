@@ -17,7 +17,7 @@ type connectionset struct {
 
 type nd struct {
 	id, description string
-	// localaddress is relative to either the bank or module that is the 
+	// localaddress is relative to either the bank or module that is the
 	// immediate parent of the register
 	localaddress uint32
 }
@@ -29,32 +29,32 @@ func newfile(id string, addr uint32, fn string) (file, error) {
 // A single register description file.
 type file struct {
 	nd
-	fn string
-	files []file
-	modules []mod
+	fn        string
+	files     []file
+	modules   []mod
 	registers []reg
-	class string
+	class     string
 }
 
 // A collection of registers
 type mod struct {
 	nd
 	description, fwinfo string
-	modules []mod
-	registers []reg
+	modules             []mod
+	registers           []reg
 }
 
 type reg struct {
 	nd
-	masks map[string]mask
+	masks       map[string]mask
 	read, write bool
-	mode string
-	size uint32
+	mode        string
+	size        uint32
 }
 
 type mask struct {
-	id string
-	val uint32
+	id          string
+	val         uint32
 	description string
 }
 
@@ -196,7 +196,7 @@ func (t *Target) parseregfile(fn, basename string, filebaseaddr uint32) error {
 					modfn := strings.Replace(module, "file://", "", 1)
 					dir, _ := filepath.Split(fn)
 					modfn = filepath.Join(dir, modfn)
-					if err := t.parseregfile(modfn, name, localaddr + filebaseaddr); err != nil {
+					if err := t.parseregfile(modfn, name, localaddr+filebaseaddr); err != nil {
 						return err
 					}
 				}

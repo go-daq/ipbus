@@ -24,4 +24,3 @@ func License() {
 	fmt.Printf(license)
 
 }
-

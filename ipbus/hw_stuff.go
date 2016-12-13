@@ -31,10 +31,10 @@ type hwpacket struct {
 }
 
 type targetstatus struct {
-	mtu uint32
+	mtu             uint32
 	nresponsebuffer uint32
-	nextid uint16
-	received, sent []packetheader
+	nextid          uint16
+	received, sent  []packetheader
 }
 
 func parseStatus(data []byte) (targetstatus, error) {
@@ -44,16 +44,16 @@ func parseStatus(data []byte) (targetstatus, error) {
 	nextid := uint16((nextheader & 0x00ffff00) >> 8)
 	received := make([]packetheader, 0, 4)
 	for i := 0; i < 4; i++ {
-		index := 32 + 4 * i
-		header, err := newPacketHeader(data[index:index + 4])
+		index := 32 + 4*i
+		header, err := newPacketHeader(data[index : index+4])
 		if err == nil {
 			received = append(received, header)
 		}
 	}
 	sent := make([]packetheader, 0, 4)
 	for i := 0; i < 4; i++ {
-		index := 48 + 4 * i
-		header, err := newPacketHeader(data[index:index + 4])
+		index := 48 + 4*i
+		header, err := newPacketHeader(data[index : index+4])
 		if err == nil {
 			sent = append(sent, header)
 		}
