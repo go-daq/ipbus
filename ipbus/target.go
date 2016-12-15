@@ -315,3 +315,12 @@ func (t Target) MaskedWriteNow(reg Register, mask string, value uint32) (uint32,
 	}
 	return r.Data[0], nil
 }
+
+// Immediately perform a read on a register and return the masked value once return packet is received
+func (t Target) MaskedReadNow(reg Register, mask string, value uint32) (uint32, error) {
+    data, err := t.ReadNow(reg, 1)
+    if err != nil {
+        return uint32(0), err
+    }
+    return reg.ReadMask(mask, data[0])
+}
