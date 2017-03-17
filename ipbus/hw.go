@@ -114,6 +114,9 @@ func (h *hw) updatetimeout() {
 		if ok {
 			dt := h.waittime - time.Since(h.flying[first].sent)
 			//fmt.Printf("update timeout = %v, wait time = %d, %v since sent at %v\n", dt, h.waittime, h.flying[first].reqresp.Sent)
+			if dt < 0 {
+				dt = 1000
+			}
 			h.timedout = time.NewTicker(dt)
 			h.timeoutid = first
 		}
