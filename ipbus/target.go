@@ -31,6 +31,7 @@ type Target struct {
 	requests            chan usrrequest
 	finishpacket, stop  chan bool
 	hw                  *hw
+	Addr				net.Addr
 }
 
 // Create a new target by parsing an XML file description.
@@ -39,7 +40,9 @@ func New(name, fn string, conn net.Conn) (Target, error) {
 	reqs := make(chan usrrequest)
 	fp := make(chan bool)
 	stop := make(chan bool)
-	t := Target{Name: name, Regs: regs, requests: reqs, finishpacket: fp, stop: stop}
+
+	raddr := conn.RemoteAddr()
+	t := Target{Name: name, Regs: regs, requests: reqs, finishpacket: fp, stop: stop, Addr: raddr}
 	t.TimeoutPeriod = DefaultTimeout
 	t.AutoDispatch = DefaultAutoDispatch
 	t.hw = newhw(conn, t.TimeoutPeriod)
