@@ -190,6 +190,7 @@ func (h *hw) handlelost() {
 				if n != len(pack.request) {
 					panic(fmt.Errorf("hw.handlelost: Sent %d of %d bytes resending packet", n, len(pack.request)))
 				}
+				fmt.Printf("Resent 0x%04x\n", resendid)
 				resendid++
 				if (resendid == 0) {
 					resendid = 1
