@@ -146,25 +146,23 @@ func (h *hw) handlelost() {
 	// Check if missing packet was either received or sent
 	packetreceived := false
 	packetsent := false
-	/*
-		for _, rh := range statusreply.ReceivedHeaders {
-			if rh.ID == h.timeoutid {
-				packetreceived = true
-				fmt.Printf("    lost packet: %v!\n", rh)
-			} else {
-				fmt.Printf("    %v\n", rh)
-			}
+	for _, rh := range statusreply.received {
+		if rh.pid == h.timeoutid {
+			packetreceived = true
+			fmt.Printf("    lost packet: %v!\n", rh)
+		} else {
+			fmt.Printf("    %v\n", rh)
 		}
-		fmt.Printf("Sent headers:\n")
-		for _, sh := range statusreply.OutgoingHeaders {
-			if sh.ID == h.timeoutid {
-				packetsent = true
-				fmt.Printf("    lost packet: %v!\n", sh)
-			} else {
-				fmt.Printf("    %v\n", sh)
-			}
+	}
+	fmt.Printf("Sent headers:\n")
+	for _, sh := range statusreply.sent {
+		if sh.pid == h.timeoutid {
+			packetsent = true
+			fmt.Printf("    lost packet: %v!\n", sh)
+		} else {
+			fmt.Printf("    %v\n", sh)
 		}
-	*/
+	}
 	if packetsent {
 		err := h.sendresendrequest(h.timeoutid)
 		fmt.Printf("Packet sent, need to send resend request.\n")
@@ -173,9 +171,32 @@ func (h *hw) handlelost() {
 		}
 		h.nverbose = 5
 		h.timedout = time.NewTicker(h.waittime)
-	} else if !packetreceived {
+	} else if !packetreceived { 
 		fmt.Printf("Packet not received, need to resend original packet (and any following ones).\n")
-		panic(fmt.Errorf("Not yet implemented resending lost outgoing packet."))
+		// Need to resend times out packet and any following packets that are in flight
+		// Start with timed out ID, look for it and consecutive IDs in the 
+		// flying map. If the packet is in the map, just write it 
+		// to the connection again.
+		resendid := h.timeoutid
+		flying := true
+		for flying {
+			pack, flying := h.flying[resendid]
+			if flying {
+				// Simply write the data again
+				n, err := h.conn.Write(pack.request)
+				if err != nil {
+					panic(err)
+				}
+				if n != len(pack.request) {
+					panic(fmt.Errorf("hw.handlelost: Sent %d of %d bytes resending packet", n, len(pack.request)))
+				}
+				resendid++
+				if (resendid == 0) {
+					resendid = 1
+				}
+			}
+		}
+		h.timedout = time.NewTicker(h.waittime)
 	} else {
 		panic(fmt.Errorf("Packet received but not sent, not sure what to do...\n"))
 	}
