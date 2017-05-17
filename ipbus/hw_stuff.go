@@ -12,7 +12,7 @@ func newResendPacket(id uint16) []byte {
 	data[1] = uint8(id >> 8)
 	data[2] = uint8(id & 0x00ff)
 	boq := uint8(0xf0)
-	data[3] = boq & uint8(resend)
+	data[3] = boq | uint8(resend)
 	return data
 }
 

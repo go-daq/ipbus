@@ -171,7 +171,8 @@ func (h *hw) handlelost() {
 		}
 		h.nverbose = 5
 		h.timedout = time.NewTicker(h.waittime)
-	} else if !packetreceived { 
+		fmt.Printf("Handled lost packet that had been sent.\n")
+	} else if !packetreceived {
 		fmt.Printf("Packet not received, need to resend original packet (and any following ones).\n")
 		// Need to resend times out packet and any following packets that are in flight
 		// Start with timed out ID, look for it and consecutive IDs in the 
@@ -289,6 +290,7 @@ func (h *hw) sendresendrequest(id uint16) error {
 	if err != nil {
 		return fmt.Errorf("hw%d failed after sending %d bytes of resend request: %v", h.Num, n, err)
 	}
+	fmt.Printf("Sent resend request 0x0%04x: %02x\n", id, data)
 	return error(nil)
 }
 
