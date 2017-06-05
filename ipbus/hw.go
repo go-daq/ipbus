@@ -287,6 +287,7 @@ func (h *hw) sendresendrequest(id uint16) error {
 	n, err := h.conn.Write(data)
 	h.bytessent += float64(n)
 	h.packssent += 1.0
+	h.resent = id
 	if err != nil {
 		return fmt.Errorf("hw%d failed after sending %d bytes of resend request: %v", h.Num, n, err)
 	}
