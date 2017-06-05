@@ -148,3 +148,78 @@ func newIDLog(size int) idlog {
 	ids := make([]uint16, size)
 	return idlog{ids: ids, first: 0, n: 0, max: size}
 }
+
+type packidok struct {
+	pack  *packet
+	id    uint16
+	ok    bool
+	reply chan packidok
+}
+
+func newpacketlog() *packetlog {
+	pks := make(map[uint16]*packet)
+	chadd := make(chan packidok)
+	chget := make(chan packidok)
+	chgetall := make(chan packidok)
+	pl := packetlog{packets: pks, chadd: chadd, chget: chget, chgetall: chgetall}
+	go pl.run()
+	return &pl
+}
+
+type packetlog struct {
+	packets                          map[uint16]*packet
+	chadd, chget, chgetall, chremove chan packidok
+}
+
+func (p *packetlog) run() {
+	select {
+	case pk := <-p.chadd:
+		// Add a packet to map
+		p.packets[pk.id] = pk.pack
+	case in := <-p.chget:
+		// Get a packet if it exists
+		pk, ok := p.packets[in.id]
+		in.pack = pk
+		in.ok = ok
+		pk.reply <- pk
+	case ch := <-p.chgetall:
+		// Return range of all current packets
+		for id, pack := range p.packets {
+			pk := packidok{pack: pack, id: id, ok: true}
+			ch.reply <- pk
+		}
+		close(ch.reply)
+	case pk := <-p.chremove:
+		// Return range of all current packets
+		delete(p.packets, pk.id)
+	}
+}
+
+func (p *packetlog) add(id uint16, pack *packet) {
+	pk := packidok{pack: pack, id: id}
+	p.chadd <- pk
+}
+
+func (p *packetlog) get(id uint16) (*packet, bool) {
+	reply := make(chan packidok)
+	pk := packidok{id: id, reply: reply}
+	p.chget <- pk
+	rep := <-reply
+	return rep.pack, rep.ok
+}
+
+func (p *packetlog) getall() map[uint16]*packet {
+	m := make(map[uint16]*packet)
+	replies := make(chan packidok, 128)
+	pk := packidok{reply:replies}
+	p.chgetall <-pk
+	for pk := range replies {
+		m[pk.id] = pk.pack
+	}
+	return m
+}
+
+func (p *packetlog) remove(id uint16) {
+	pk := packidok{id:id}
+	p.chremove <-pk
+}

@@ -31,7 +31,7 @@ type Target struct {
 	requests            chan usrrequest
 	finishpacket, stop  chan bool
 	hw                  *hw
-	Addr				net.Addr
+	Addr                net.Addr
 }
 
 // Create a new target by parsing an XML file description.
@@ -321,9 +321,9 @@ func (t Target) MaskedWriteNow(reg Register, mask string, value uint32) (uint32,
 
 // Immediately perform a read on a register and return the masked value once return packet is received
 func (t Target) MaskedReadNow(reg Register, mask string) (uint32, error) {
-    data, err := t.ReadNow(reg, 1)
-    if err != nil {
-        return uint32(0), err
-    }
-    return reg.ReadMask(mask, data[0])
+	data, err := t.ReadNow(reg, 1)
+	if err != nil {
+		return uint32(0), err
+	}
+	return reg.ReadMask(mask, data[0])
 }

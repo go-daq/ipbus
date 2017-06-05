@@ -175,8 +175,8 @@ func (h *hw) handlelost() {
 	} else if !packetreceived {
 		fmt.Printf("Packet not received, need to resend original packet (and any following ones).\n")
 		// Need to resend times out packet and any following packets that are in flight
-		// Start with timed out ID, look for it and consecutive IDs in the 
-		// flying map. If the packet is in the map, just write it 
+		// Start with timed out ID, look for it and consecutive IDs in the
+		// flying map. If the packet is in the map, just write it
 		// to the connection again.
 		resendid := h.timeoutid
 		flying := true
@@ -193,7 +193,7 @@ func (h *hw) handlelost() {
 				}
 				fmt.Printf("Resent 0x%04x\n", resendid)
 				resendid++
-				if (resendid == 0) {
+				if resendid == 0 {
 					resendid = 1
 				}
 			}
