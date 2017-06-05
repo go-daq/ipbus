@@ -56,7 +56,7 @@ type hw struct {
 	// overrun this bound. This is not currently implemented.
 	// New stuff for multiple packets in flight:
 	inflight, maxflight         int
-	tosend, flying, replied     map[uint16]*packet
+	tosend, flying, replied     *packetlog
 	queuedids, flyingids        idlog
 	timedout                    *time.Ticker
 	incoming                    chan *packet
@@ -77,9 +77,9 @@ type hw struct {
 func (h *hw) init() {
 	h.statuses = make(chan targetstatus, 10)
 	h.replies = make(chan hwpacket, 100)
-	h.tosend = make(map[uint16]*packet)
-	h.flying = make(map[uint16]*packet)
-	h.replied = make(map[uint16]*packet)
+	h.tosend = newpacketlog()
+	h.flying = newpacketlog()
+	h.replied = newpacketlog()
 	h.queuedids = newIDLog(256)
 	h.flyingids = newIDLog(32)
 	h.timedout = time.NewTicker(10000 * time.Second)
@@ -112,7 +112,8 @@ func (h *hw) updatetimeout() {
 	if h.inflight > 0 {
 		first, ok := h.flyingids.secondoldest()
 		if ok {
-			dt := h.waittime - time.Since(h.flying[first].sent)
+			firstpack, _ := h.flying.get(first)
+			dt := h.waittime - time.Since(firstpack.sent)
 			//fmt.Printf("update timeout = %v, wait time = %d, %v since sent at %v\n", dt, h.waittime, h.flying[first].reqresp.Sent)
 			if dt < 0 {
 				dt = 1000
@@ -132,7 +133,7 @@ func (h *hw) handlelost() {
 	fmt.Printf("received = %v\n", h.received)
 	fmt.Printf("returned = %v\n", h.returned)
 	fmt.Printf("Flying requests:\n")
-	for id, req := range h.flying {
+	for id, req := range h.flying.getall() {
 		fmt.Printf("id = %d = 0x%x: %v\n", id, id, req)
 	}
 	// Get status
@@ -181,7 +182,7 @@ func (h *hw) handlelost() {
 		resendid := h.timeoutid
 		flying := true
 		for flying {
-			pack, flying := h.flying[resendid]
+			pack, flying := h.flying.get(resendid)
 			if flying {
 				// Simply write the data again
 				n, err := h.conn.Write(pack.request)
@@ -222,20 +223,20 @@ func (h *hw) ConfigDevice() {
 // Send the next queued packet if there are slots available
 func (h *hw) sendnext() error {
 	err := error(nil)
-	for h.inflight < h.maxflight && len(h.tosend) > 0 {
+	for h.inflight < h.maxflight && len(h.tosend.getall()) > 0 {
 		first, ok := h.queuedids.oldest()
 		if !ok {
 			return fmt.Errorf("Failed to get oldest queued ID")
 		}
 		h.queuedids.remove()
-		pack := h.tosend[first]
-		delete(h.tosend, first)
+		pack, _ := h.tosend.get(first)
+		h.tosend.remove(first)
 		err = h.sendpack(pack)
 		if err != nil {
 			return err
 		}
 		pack.sent = time.Now()
-		h.flying[first] = pack
+		h.flying.add(first, pack)
 		h.flyingids.add(first)
 		h.inflight += 1
 		if h.inflight == 1 {
@@ -303,10 +304,10 @@ func (h *hw) returnreply() {
 		if !ok {
 			break
 		}
-		p, ok := h.replied[first]
+		p, ok := h.replied.get(first)
 		if ok {
 			h.flyingids.remove()
-			delete(h.replied, first)
+			h.replied.remove(first)
 			h.returned.add(first)
 			// Send all the transactions in the packet to their respective channels
 			p.send()
@@ -402,7 +403,7 @@ func (h *hw) Run() {
 
 			//h.tosend[req.reqresp.Out.ID] = req
 			//err := h.queuedids.add(req.reqresp.Out.ID)
-			h.tosend[pack.id] = pack
+			h.tosend.add(pack.id, pack)
 			err := h.queuedids.add(pack.id)
 			if err != nil {
 				panic(err)
@@ -434,7 +435,7 @@ func (h *hw) Run() {
 				// or for deciding what to do with a lost packet
 				h.statuses <- st
 			} else {
-				req, ok := h.flying[id]
+				req, ok := h.flying.get(id)
 				if ok {
 					h.inflight -= 1
 					oldest, _ := h.flyingids.oldest()
@@ -442,7 +443,7 @@ func (h *hw) Run() {
 						h.timedout.Stop()
 						h.updatetimeout()
 					}
-					delete(h.flying, id)
+					h.flying.remove(id)
 					h.sendnext()
 					// Need to parse reply packet
 					/*
@@ -457,7 +458,7 @@ func (h *hw) Run() {
 					if err != nil {
 						fmt.Printf("Error parsing reply: %v\n", err)
 					}
-					h.replied[id] = req
+					h.replied.add(id, req)
 					h.returnreply()
 				} else {
 					if id == h.resent {

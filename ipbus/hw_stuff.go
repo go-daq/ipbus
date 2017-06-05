@@ -181,7 +181,7 @@ func (p *packetlog) run() {
 		pk, ok := p.packets[in.id]
 		in.pack = pk
 		in.ok = ok
-		pk.reply <- pk
+		in.reply <- in
 	case ch := <-p.chgetall:
 		// Return range of all current packets
 		for id, pack := range p.packets {
@@ -211,8 +211,8 @@ func (p *packetlog) get(id uint16) (*packet, bool) {
 func (p *packetlog) getall() map[uint16]*packet {
 	m := make(map[uint16]*packet)
 	replies := make(chan packidok, 128)
-	pk := packidok{reply:replies}
-	p.chgetall <-pk
+	pk := packidok{reply: replies}
+	p.chgetall <- pk
 	for pk := range replies {
 		m[pk.id] = pk.pack
 	}
@@ -220,6 +220,6 @@ func (p *packetlog) getall() map[uint16]*packet {
 }
 
 func (p *packetlog) remove(id uint16) {
-	pk := packidok{id:id}
-	p.chremove <-pk
+	pk := packidok{id: id}
+	p.chremove <- pk
 }
