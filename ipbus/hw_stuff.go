@@ -161,7 +161,8 @@ func newpacketlog() *packetlog {
 	chadd := make(chan packidok)
 	chget := make(chan packidok)
 	chgetall := make(chan packidok)
-	pl := packetlog{packets: pks, chadd: chadd, chget: chget, chgetall: chgetall}
+	chremove := make(chan packidok)
+	pl := packetlog{packets: pks, chadd: chadd, chget: chget, chgetall: chgetall, chremove:chremove}
 	go pl.run()
 	return &pl
 }
@@ -172,26 +173,28 @@ type packetlog struct {
 }
 
 func (p *packetlog) run() {
-	select {
-	case pk := <-p.chadd:
-		// Add a packet to map
-		p.packets[pk.id] = pk.pack
-	case in := <-p.chget:
-		// Get a packet if it exists
-		pk, ok := p.packets[in.id]
-		in.pack = pk
-		in.ok = ok
-		in.reply <- in
-	case ch := <-p.chgetall:
-		// Return range of all current packets
-		for id, pack := range p.packets {
-			pk := packidok{pack: pack, id: id, ok: true}
-			ch.reply <- pk
+	for {
+		select {
+		case pk := <-p.chadd:
+			// Add a packet to map
+			p.packets[pk.id] = pk.pack
+		case in := <-p.chget:
+			// Get a packet if it exists
+			pk, ok := p.packets[in.id]
+			in.pack = pk
+			in.ok = ok
+			in.reply <- in
+		case ch := <-p.chgetall:
+			// Return range of all current packets
+			for id, pack := range p.packets {
+				pk := packidok{pack: pack, id: id, ok: true}
+				ch.reply <- pk
+			}
+			close(ch.reply)
+		case pk := <-p.chremove:
+			// Return range of all current packets
+			delete(p.packets, pk.id)
 		}
-		close(ch.reply)
-	case pk := <-p.chremove:
-		// Return range of all current packets
-		delete(p.packets, pk.id)
 	}
 }
 
