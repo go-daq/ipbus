@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const DefaultTimeout = time.Second
+const DefaultTimeout = 3 * time.Second
 const DefaultAutoDispatch = false
 
 type Target struct {

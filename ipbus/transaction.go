@@ -44,7 +44,7 @@ type packet struct {
 }
 
 func (p packet) String() string {
-	return fmt.Sprintf("packet id = %d, request = %x", p.id, p.request)
+	return fmt.Sprintf("packet id = %d, sent at %v, request = %x", p.id, p.sent, p.request)
 }
 
 func (p packet) Bytes() []byte {

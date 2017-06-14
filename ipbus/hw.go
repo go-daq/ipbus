@@ -115,23 +115,36 @@ func (h *hw) updatetimeout() {
 			firstpack, _ := h.flying.get(first)
 			dt := h.waittime - time.Since(firstpack.sent)
 			//fmt.Printf("update timeout = %v, wait time = %d, %v since sent at %v\n", dt, h.waittime, h.flying[first].reqresp.Sent)
+			if h.nverbose > 0 {
+				fmt.Printf("update timeout = %v, wait time = %d\n", dt, h.waittime)
+			}
 			if dt < 0 {
 				dt = 1000
 			}
 			h.timedout = time.NewTicker(dt)
 			h.timeoutid = first
+		} else {
+			if h.nverbose > 0 {
+				fmt.Printf("updatetimeout() no second oldest...\n")
+			}
+		}
+	} else {
+		h.timedout.Stop()
+		if h.nverbose > 0 {
+			fmt.Printf("updatetimeout() no packets in flight, stopping ticker\n")
 		}
 	}
 }
 
 func (h *hw) handlelost() {
+	h.SetVerbose(5)
 	h.timedout.Stop()
 	h.handlinglost = true
-	fmt.Printf("Trying to handle a lost packet with id = %d = 0x%x.\n", h.timeoutid, h.timeoutid)
-	fmt.Printf("Previously returned = %v, %d\n", h.returnedids, h.returnedindex)
-	fmt.Printf("sent out = %v\n", h.sentout)
-	fmt.Printf("received = %v\n", h.received)
-	fmt.Printf("returned = %v\n", h.returned)
+	fmt.Printf("Trying to handle a lost packet with id = %d = 0x%x: %v.\n", h.timeoutid, h.timeoutid, time.Now())
+	//fmt.Printf("Previously returned = %v, %d\n", h.returnedids, h.returnedindex)
+	//fmt.Printf("sent out = %v\n", h.sentout)
+	//fmt.Printf("received = %v\n", h.received)
+	//fmt.Printf("returned = %v\n", h.returned)
 	fmt.Printf("Flying requests:\n")
 	for id, req := range h.flying.getall() {
 		fmt.Printf("id = %d = 0x%x: %v\n", id, id, req)
@@ -171,7 +184,8 @@ func (h *hw) handlelost() {
 			panic(err)
 		}
 		h.nverbose = 5
-		h.timedout = time.NewTicker(h.waittime)
+		//h.timedout = time.NewTicker(h.waittime)
+		h.updatetimeout()
 		fmt.Printf("Handled lost packet that had been sent.\n")
 	} else if !packetreceived {
 		fmt.Printf("Packet not received, need to resend original packet (and any following ones).\n")
@@ -181,6 +195,7 @@ func (h *hw) handlelost() {
 		// to the connection again.
 		resendid := h.timeoutid
 		flying := true
+		resentpack := false
 		for flying {
 			pack, flying := h.flying.get(resendid)
 			if flying {
@@ -192,17 +207,27 @@ func (h *hw) handlelost() {
 				if n != len(pack.request) {
 					panic(fmt.Errorf("hw.handlelost: Sent %d of %d bytes resending packet", n, len(pack.request)))
 				}
+				pack.sent = time.Now()
+				h.flying.add(resendid, pack)
 				fmt.Printf("Resent 0x%04x\n", resendid)
 				resendid++
 				if resendid == 0 {
 					resendid = 1
 				}
+				resentpack = true
 			}
 		}
-		h.timedout = time.NewTicker(h.waittime)
+		//h.timedout = time.NewTicker(h.waittime)
+		if resentpack {
+			h.updatetimeout()
+		}
 	} else {
 		panic(fmt.Errorf("Packet received but not sent, not sure what to do...\n"))
 	}
+	h.handlinglost = false 
+	// Better flush the outgoing just in case...
+	fmt.Printf("Calling sendnext at end of handlelost...\n")
+	h.sendnext()
 }
 
 // Get the device's status to set MTU and next ID.
@@ -222,8 +247,19 @@ func (h *hw) ConfigDevice() {
 
 // Send the next queued packet if there are slots available
 func (h *hw) sendnext() error {
+	if h.nverbose > 0 {
+		fmt.Printf("hw.sendnext()\n")
+	}
+	if h.handlinglost {
+		fmt.Printf("hw.sendnext(): Handling lost packet, not sending...\n")
+		return nil
+	}
 	err := error(nil)
-	for h.inflight < h.maxflight && len(h.tosend.getall()) > 0 {
+	tosend := h.tosend.getall()
+	if h.nverbose > 0 {
+		fmt.Printf("h.sendnext: %d in flight, %d max flight, len(tosend) = %d\n", h.inflight, h.maxflight, len(tosend))
+	}
+	for h.inflight < h.maxflight && len(tosend) > 0 {
 		first, ok := h.queuedids.oldest()
 		if !ok {
 			return fmt.Errorf("Failed to get oldest queued ID")
@@ -271,9 +307,12 @@ func (h *hw) sendpack(pack *packet) error {
 
 func (h *hw) sendstatusrequest() error {
 	data := newStatusPacket()
+	fmt.Printf("HW%d sending status request: %x\n", h.Num, data)
+	/*
 	if h.nverbose > 0 {
 		fmt.Printf("HW%d sending status request: %x\n", h.Num, data)
 	}
+	*/
 	n, err := h.conn.Write(data)
 	h.bytessent += float64(n)
 	h.packssent += 1.0
@@ -352,7 +391,7 @@ func (h *hw) Run() {
 			running = false
 		case pack := <-h.incoming:
 			if h.nverbose > 0 {
-				fmt.Printf("Packet read from h.incoming: %v\n", pack)
+				fmt.Printf("%v: hw.Run read from h.incoming: %v\n", time.Now(), pack)
 			}
 			// Handle sending out packet
 			// Will move status and resend requests to another channel.
@@ -423,7 +462,7 @@ func (h *hw) Run() {
 			id := rep.header.pid
 			h.received.add(id)
 			if h.nverbose > 0 {
-				fmt.Printf("Received packet with ID = %d = 0x%x\n", id, id)
+				fmt.Printf("%v: hw.Run received reply with ID = %d = 0x%x\n", time.Now(), id, id)
 				h.nverbose -= 1
 			}
 			if id == 0 { // id == 0 should be status packet
@@ -470,7 +509,7 @@ func (h *hw) Run() {
 			}
 		case <-h.timedout.C:
 			// Handle timeout on oldest packet in flight
-			fmt.Printf("hw%d: lost a packet :(\nSent ID log: %v\nqueued ID log: %v\nh.nextID = %d", h.Num, h.flyingids, h.queuedids, h.nextID)
+			fmt.Printf("hw%d: lost a packet :(\nSent ID log: %v\nqueued ID log: %v\nh.nextID = %d\n", h.Num, h.flyingids, h.queuedids, h.nextID)
 			go h.handlelost()
 		case <-reportticker.C:
 			dt := h.reporttime.Seconds()
@@ -527,7 +566,7 @@ func (h *hw) receive() {
 			fmt.Printf("hw%d not receiving as connection closed: %v\n", h.Num, err)
 		} else {
 			if h.nverbose > 0 {
-				fmt.Printf("Received a packet of %d bytes: 0x%x.\n", n, p.Data[:n])
+				fmt.Printf("%v: hw.receive() packet of %d bytes: 0x%x.\n", time.Now(), n, p.Data[:n])
 			}
 			p.Data = p.Data[:n]
 			p.RAddr = h.raddr
