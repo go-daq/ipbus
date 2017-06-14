@@ -112,8 +112,13 @@ func (h *hw) updatetimeout() {
 	if h.inflight > 0 {
 		first, ok := h.flyingids.secondoldest()
 		if ok {
-			firstpack, _ := h.flying.get(first)
-			dt := h.waittime - time.Since(firstpack.sent)
+			dt := h.waittime
+			firstpack, ok := h.flying.get(first)
+			if ok {
+				dt -= time.Since(firstpack.sent)
+			} else {
+				fmt.Printf("hw.updatetimeout: Warning: no first pack...\n")
+			}
 			//fmt.Printf("update timeout = %v, wait time = %d, %v since sent at %v\n", dt, h.waittime, h.flying[first].reqresp.Sent)
 			if h.nverbose > 0 {
 				fmt.Printf("update timeout = %v, wait time = %d\n", dt, h.waittime)
