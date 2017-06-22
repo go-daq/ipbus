@@ -201,8 +201,10 @@ func (h *hw) handlelost() {
 		resendid := h.timeoutid
 		flying := true
 		resentpack := false
+		h.flying.Verbose = true
 		for flying {
-			pack, flying := h.flying.get(resendid)
+			var pack *packet
+			pack, flying = h.flying.get(resendid)
 			if flying {
 				// Simply write the data again
 				n, err := h.conn.Write(pack.request)
@@ -222,6 +224,7 @@ func (h *hw) handlelost() {
 				resentpack = true
 			}
 		}
+		h.flying.Verbose = false
 		//h.timedout = time.NewTicker(h.waittime)
 		if resentpack {
 			h.updatetimeout()
@@ -256,7 +259,7 @@ func (h *hw) sendnext() error {
 		fmt.Printf("hw.sendnext()\n")
 	}
 	if h.handlinglost {
-		fmt.Printf("hw.sendnext(): Handling lost packet, not sending...\n")
+		fmt.Printf("%s: hw.sendnext(): Handling lost packet, not sending...\n", time.Now())
 		return nil
 	}
 	err := error(nil)

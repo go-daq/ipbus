@@ -170,6 +170,7 @@ func newpacketlog() *packetlog {
 type packetlog struct {
 	packets                          map[uint16]*packet
 	chadd, chget, chgetall, chremove chan packidok
+	Verbose bool
 }
 
 func (p *packetlog) run() {
@@ -204,10 +205,22 @@ func (p *packetlog) add(id uint16, pack *packet) {
 }
 
 func (p *packetlog) get(id uint16) (*packet, bool) {
+	if p.Verbose {
+		fmt.Printf("packetlog.get(%04x)\n", id)
+	}
 	reply := make(chan packidok)
 	pk := packidok{id: id, reply: reply}
+	if p.Verbose {
+		fmt.Printf("p.chget <- pk\n")
+	}
 	p.chget <- pk
+	if p.Verbose {
+		fmt.Printf("rep := <- reply\n")
+	}
 	rep := <-reply
+	if p.Verbose {
+		fmt.Printf("packetlog.get(%04x) returning, pack %t\n", id, rep.ok)
+	}
 	return rep.pack, rep.ok
 }
 
