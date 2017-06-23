@@ -232,7 +232,7 @@ func (h *hw) handlelost() {
 	} else {
 		panic(fmt.Errorf("Packet received but not sent, not sure what to do...\n"))
 	}
-	h.handlinglost = false 
+	h.handlinglost = false
 	// Better flush the outgoing just in case...
 	fmt.Printf("Calling sendnext at end of handlelost...\n")
 	h.sendnext()
@@ -317,9 +317,9 @@ func (h *hw) sendstatusrequest() error {
 	data := newStatusPacket()
 	fmt.Printf("HW%d sending status request: %x\n", h.Num, data)
 	/*
-	if h.nverbose > 0 {
-		fmt.Printf("HW%d sending status request: %x\n", h.Num, data)
-	}
+		if h.nverbose > 0 {
+			fmt.Printf("HW%d sending status request: %x\n", h.Num, data)
+		}
 	*/
 	n, err := h.conn.Write(data)
 	h.bytessent += float64(n)

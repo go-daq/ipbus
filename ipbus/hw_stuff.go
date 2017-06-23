@@ -162,7 +162,7 @@ func newpacketlog() *packetlog {
 	chget := make(chan packidok)
 	chgetall := make(chan packidok)
 	chremove := make(chan packidok)
-	pl := packetlog{packets: pks, chadd: chadd, chget: chget, chgetall: chgetall, chremove:chremove}
+	pl := packetlog{packets: pks, chadd: chadd, chget: chget, chgetall: chgetall, chremove: chremove}
 	go pl.run()
 	return &pl
 }
@@ -170,7 +170,7 @@ func newpacketlog() *packetlog {
 type packetlog struct {
 	packets                          map[uint16]*packet
 	chadd, chget, chgetall, chremove chan packidok
-	Verbose bool
+	Verbose                          bool
 }
 
 func (p *packetlog) run() {
