@@ -74,7 +74,7 @@ func (p *packet) parse(data []byte) error {
 			tid := int(transheader.id)
 			if tid >= len(p.transactions) {
 				fmt.Printf("Found wrong transaction ID = %d. Only %d transactions.", tid, len(p.transactions))
-				fmt.Printf("p = %v\n")
+				fmt.Printf("p = %v\n", p)
 				panic(fmt.Errorf("Invalid transaction ID."))
 			}
 			trans := p.transactions[transheader.id]

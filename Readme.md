@@ -51,7 +51,7 @@ Dependencies
 ------------
 
 The goipbus package does not depend on any packages outside the go standard library.
-The package was developed and tested using go version go1.6.2 linux/amd64.
+The package was developed and tested using go version go1.8.1 linux/amd64.
 It is expected to work with any go1.x.
 
 Fully testing the package requires the C++ IPbus implemenation to be installed (see https://svnweb.cern.ch/trac/cactus/wiki/uhalQuickTutorial#HowtoInstalltheIPbusSuite) because tests are run which communicate with the dummy hardware included in that package.

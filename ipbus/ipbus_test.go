@@ -203,7 +203,7 @@ func TestRMWbits(t *testing.T) {
 	}
 	value := resp.Data[0]
 	if value != testval {
-		t.Fatal("Reply from RMWbits value is 0x%x, expected 0x%x", value, testval)
+		t.Fatalf("Reply from RMWbits value is 0x%x, expected 0x%x", value, testval)
 	}
 	t.Logf("Read word from test register.")
 	respchan = target.Read(testreg, 1)
@@ -250,7 +250,7 @@ func TestRMWsum(t *testing.T) {
 	}
 	value := resp.Data[0]
 	if value != testval {
-		t.Fatal("Reply from RMWsum value is 0x%x, expected 0x%x", value, testval)
+		t.Fatalf("Reply from RMWsum value is 0x%x, expected 0x%x", value, testval)
 	}
 	t.Logf("Read word from test register.")
 	respchan = target.Read(testreg, 1)
