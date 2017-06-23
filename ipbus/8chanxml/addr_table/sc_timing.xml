@@ -1,0 +1,19 @@
+<node id="timing" description="Sample clock domain control" fwinfo="endpoint">
+	<node id="csr" address="0x0" description="ctrl/status register" fwinfo="endpoint;width=1">
+		<node id="ctrl" address="0x0">
+			<node id="rst" mask="0x1"/>
+			<node id="rst_ctr" mask="0x2"/>
+			<node id="cap_ctr" mask="0x4"/>
+			<node id="en_sync" mask="0x8"/>
+			<node id="force_sync" mask="0x10"/>
+			<node id="chan_slip" mask="0x1000"/>
+			<node id="chan_rst_buf" mask="0x2000"/>
+			<node id="chan_cap" mask="0x4000"/>
+			<node id="chan_inc" mask="0x8000"/>
+		</node>
+	</node>
+	<node id="sctr" address="0x2" description="local sample counter" fwinfo="endpoint;width=1">
+		<node id="bottom" address="0x0"/>
+		<node id="top" address="0x1"/>
+	</node>
+</node>

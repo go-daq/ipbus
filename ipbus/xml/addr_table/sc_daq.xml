@@ -1,0 +1,32 @@
+<node id="TOP">
+	<node id="id" address="0x0" description="ID register" fwinfo="endpoint;width=1">
+		<node id="magic" address="0x0"/>
+		<node id="info" address="0x1">
+			<node id="fwrev" mask="0xff"/>
+			<node id="slot" mask="0xf00"/>
+		</node>
+	</node>
+	<node id="csr" address="0x4" description="ctrl/status register" fwinfo="endpoint;width=2">
+		<node id="ctrl" address="0x0">
+			<node id="nuke" mask="0x1"/>
+			<node id="soft_rst" mask="0x2"/>
+			<node id="mmcm_rst" mask="0x4"/>
+			<node id="clk_sel" mask="0x8"/>
+			<node id="idelctrl_rst" mask="0x10"/>
+			<node id="chan_sel" mask="0xff00"/>
+			<node id="board_id" mask="0xf0000000"/>
+		</node>
+		<node id="window_ctrl" address="0x1">
+			<node id="lag" mask="0xffff"/>
+			<node id="size" mask="0xffff0000"/>
+		</node>
+		<node id="stat" address="0x2">
+			<node id="clk_lock" mask="0x1"/>
+			<node id="clk_stop" mask="0x2"/>
+			<node id="idelctrl_rdy" mask="0x4"/>
+		</node>
+	</node>
+	<node id="timing" address="0x10" module="file://sc_timing.xml"/>
+	<node id="chan" address="0x20" mode="port" description="channel FIFO access" fwinfo="endpoint;width=0"/>
+</node>
+

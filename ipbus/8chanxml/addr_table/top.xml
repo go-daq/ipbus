@@ -1,0 +1,20 @@
+<node id="TOP">
+	<node id="ctrl_reg" address="0x0" description="ctrl/stat register" fwinfo="endpoint;width=2">
+		<node id="ctrl" address="0x0">
+			<node id="soft_rst" mask="0x1"/>
+			<node id="nuke" mask="0x2"/>
+			<node id="rst_mmcm" mask="0x4"/>
+			<node id="rst_idelayctrl" mask="0x8"/>
+			<node id="chan" mask="0xff00"/>
+			<node id="board_id" mask="0xff0000"/>
+		</node>
+		<node id="id" address="0x2"/>
+		<node id="stat" address="0x3">
+			<node id="mmcm_locked" mask="0x1"/>
+			<node id="idelayctrl_rdy" mask="0x2"/>			
+		</node>
+	</node>
+	<node id="chan" address="0x8" module="file://sc_chan_standalone.xml"/>
+	<node id="io" address="0x20" module="file://sc_io.xml"/>
+	<node id="timing" address="0x40" module="file://sc_timing.xml"/>
+</node>
