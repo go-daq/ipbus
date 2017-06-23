@@ -8,7 +8,7 @@ import (
 
 // Supported IPbus protocol version
 const IPbusVersion = 2.0
-const PackageVersion = 0.0 // Not yet an actual version
+const PackageVersion = 1.0 // 23 Jun 17
 const protocolversion = uint32(2)
 
 var defaultorder = binary.LittleEndian

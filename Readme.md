@@ -78,10 +78,8 @@ This software is released under a 3-clause BSD license, see [[License.md]] or ca
 Versions
 --------
 
-The current version of the goipbus package is 0.1.
+The current version of the goipbus package is 1.0.
 The version can be accessed as `ipbus.PackageVersion`.
-
-**I am currently working towards getting a stable API with basic functionality tested, which will be released publicly as v1.0.**
 
 Logo
 ----
