@@ -1,3 +1,7 @@
+// Copyright 2018 The go-daq Authors.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package ipbus enables communication with FPGAs using the IPbus UDP protocol.
 package ipbus
 
@@ -7,9 +11,11 @@ import (
 )
 
 // Supported IPbus protocol version
-const IPbusVersion = 2.0
-const PackageVersion = 1.0 // 23 Jun 17
-const protocolversion = uint32(2)
+const (
+	IPbusVersion    = "2.0.0"
+	PackageVersion  = "1.0.0" // 23 Jun 17
+	protocolversion = uint32(2)
+)
 
 var defaultorder = binary.LittleEndian
 var verbose = false

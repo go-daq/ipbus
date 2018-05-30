@@ -30,7 +30,7 @@ import (
     "net"
 )
 
-func main() 
+func main()
     conn, err := net.Dial("udp4", "localhost:50001")
     // Handle error...
     fn := "hardwaredescription.xml"
@@ -54,13 +54,13 @@ The `ipbus` package does not depend on any packages outside the go standard libr
 The package was developed and tested using go version go1.8.1 linux/amd64.
 It is expected to work with any go1.x.
 
-Fully testing the package requires the C++ IPbus implemenation to be installed (see https://svnweb.cern.ch/trac/cactus/wiki/uhalQuickTutorial#HowtoInstalltheIPbusSuite) because tests are run which communicate with the dummy hardware included in that package.
+Fully testing the package requires the C++ IPbus implementation to be installed (see https://svnweb.cern.ch/trac/cactus/wiki/uhalQuickTutorial#HowtoInstalltheIPbusSuite) because tests are run which communicate with the dummy hardware included in that package.
 *Package users do not need to install the C++ library.*
 You can skip all tests that require the dummy hardware with the command:
 
 ```
 go test -nodummyhardware
-``` 
+```
 
 ## Documentation
 
@@ -71,11 +71,12 @@ https://godoc.org/github.com/go-daq/ipbus
 
 ## License
 
-This software is released under a 3-clause BSD license, see [[License.md]] or call `ipbus.License()`.
+This software is released under a 3-clause BSD license, see [go-daq/license](https://github.com/go-daq/license) or call `ipbus.License()`.
+`ipbus` was originally released under [LICENSE.goipbus.md](/LICENSE.goipbus.md).
 
 ## Versions
 
-The current version of the `ipbus` package is 1.0.
+The current version of the `ipbus` package is 1.0.0.
 The version can be accessed as `ipbus.PackageVersion`.
 
 ## Logo
