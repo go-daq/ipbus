@@ -1,20 +1,22 @@
-package ipbus
+package ipbus_test
 
 import (
 	"testing"
+
+	"github.com/go-daq/ipbus"
 )
 
 func TestParserMissingFile(t *testing.T) {
-	_, err := NewCM("missing.xml")
+	_, err := ipbus.NewCM("missing.xml")
 	if err == nil {
-		t.Errorf("No error when trying to access a missing connection file.")
+		t.Fatalf("No error when trying to access a missing connection file.")
 	}
 }
 
 func TestParserMissingTarget(t *testing.T) {
-	cm, err := NewCM("xml/testconnections.xml")
+	cm, err := ipbus.NewCM("testdata/xml/testconnections.xml")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 		return
 	}
 	_, err = cm.Target("MISSING")
@@ -24,7 +26,7 @@ func TestParserMissingTarget(t *testing.T) {
 }
 
 func TestParser8chan(t *testing.T) {
-	cm, err := NewCM("8chanxml/solidfpga.xml")
+	cm, err := ipbus.NewCM("testdata/8chanxml/solidfpga.xml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +102,7 @@ func TestParser8chan(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
-	cm, err := NewCM("xml/testconnections.xml")
+	cm, err := ipbus.NewCM("testdata/xml/testconnections.xml")
 	if err != nil {
 		t.Fatal(err)
 		return

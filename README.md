@@ -1,5 +1,4 @@
-goIPbus
-=======
+# ipbus
 
 IPbus2.0 client library implemented in go.
 
@@ -11,22 +10,20 @@ The client library allows software to read and write values to IPbus registers i
 The Go implementation was first developed as part of the read-out system of the 288 kg prototype SoLid anti-neutrino detector (http://arxiv.org/abs/1510.07835).
 The code was then split into a package for use in the full scale SoLid detector.
 
-Installation and usage
------------------------
+## Installation and usage
 
-Once you have set up your Go work area you can instal the goipbus package with the following command:
+Once you have set up your Go work area you can instal the `ipbus` package with the following command:
 
-````
-go get bitbucket.org/NickRyder/goipbus/ipbus
-````
+```
+go get github.com/go-daq/ipbus
+```
 
 and then use it in your code, such as:
-````
-#!go
+```go
 package main
 
 import (
-    "bitbucket.org/NickRyder/goipbus/ipbus"
+    "github.com/go-daq/ipbus"
     "net"
 )
 
@@ -46,11 +43,11 @@ func main()
         process(rep.Data)
     }
 }
-````
-Dependencies
-------------
+```
 
-The goipbus package does not depend on any packages outside the go standard library.
+## Dependencies
+
+The `ipbus` package does not depend on any packages outside the go standard library.
 The package was developed and tested using go version go1.8.1 linux/amd64.
 It is expected to work with any go1.x.
 
@@ -58,30 +55,26 @@ Fully testing the package requires the C++ IPbus implemenation to be installed (
 *Package users do not need to install the C++ library.*
 You can skip all tests that require the dummy hardware with the command:
 
-````
+```
 go test -nodummyhardware
-```` 
+``` 
 
-Documentation
--------------
+## Documentation
 
-The documentation for the `goipbus` package can be found at:
+The documentation for the `ipbus` package can be found at:
 
-https://godoc.org/bitbucket.org/NickRyder/goipbus/ipbus
+https://godoc.org/github.com/go-daq/ipbus
 
 
-License
--------
+## License
 
 This software is released under a 3-clause BSD license, see [[License.md]] or call `ipbus.License()`.
 
-Versions
---------
+## Versions
 
-The current version of the goipbus package is 1.0.
+The current version of the `ipbus` package is 1.0.
 The version can be accessed as `ipbus.PackageVersion`.
 
-Logo
-----
+## Logo
 
-The goipbus logo uses the `gophercolor` image (see https://golang.org/doc/gopher/) designed by Renee French.
+The `ipbus` logo uses the `gophercolor` image (see https://golang.org/doc/gopher/) designed by Renee French.

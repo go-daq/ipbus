@@ -1,7 +1,6 @@
 package ipbus
 
 import (
-	//"math/rand"
 	"flag"
 	"fmt"
 	"net"
@@ -25,7 +24,7 @@ var ipbusverbose *bool
 
 func TestMain(m *testing.M) {
 	ipbusverbose = flag.Bool("ipbusverbose", false, "Turn on verbosity of ipbus package")
-	nodummy = flag.Bool("nodummyhardware", false, "Skip tests requiring dummy hardware.")
+	nodummy = flag.Bool("nodummyhardware", true, "Skip tests requiring dummy hardware.")
 	trenz = flag.Bool("trenzhardware", false, "Enable tests against Trenz board.")
 	flag.Parse()
 	verbose = *ipbusverbose
@@ -59,7 +58,7 @@ func starttrenz() {
 		if err != nil {
 			panic(err)
 		}
-		t, err := New("dummy", "xml/trenz/top.xml", conn)
+		t, err := New("dummy", "testdata/xml/trenz/top.xml", conn)
 		if err != nil {
 			panic(err)
 		}
@@ -106,7 +105,7 @@ func starttarget() {
 		if err != nil {
 			panic(err)
 		}
-		t, err := New("dummy", "xml/dummy_address.xml", conn)
+		t, err := New("dummy", "testdata/xml/dummy_address.xml", conn)
 		if err != nil {
 			panic(err)
 		}
@@ -125,7 +124,7 @@ func TestTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	notarget, err := New("nodummy", "xml/dummy_address.xml", conn)
+	notarget, err := New("nodummy", "testdata/xml/dummy_address.xml", conn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +390,7 @@ func TestPermissions(t *testing.T) {
 		t.Skip()
 	}
 	/*
-		cm, err := NewCM("xml/dummy_connections.xml")
+		cm, err := NewCM("testdata/xml/dummy_connections.xml")
 		if err != nil {
 			t.Fatal(err)
 		}
