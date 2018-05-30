@@ -1,5 +1,8 @@
 # ipbus
 
+[![GoDoc](https://godoc.org/github.com/go-daq/ipbus?status.svg)](https://godoc.org/github.com/go-daq/ipbus)
+
+
 IPbus2.0 client library implemented in go.
 
 The IPbus protocol allows communication with an FPGA via TCP or UDP.
